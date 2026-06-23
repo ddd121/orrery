@@ -8,6 +8,8 @@ export type GraphNode = {
   role: string;
   importance: number;
   news: never[];
+  scrutiny: number;
+  scrutinyMoney?: string;
 };
 export type GraphLink = {
   source: string;
@@ -90,6 +92,8 @@ export async function loadGraph(): Promise<{
       role,
       importance: Math.max(4, Math.min(10, 4 + deg)),
       news: [],
+      scrutiny: Number(attrs.scrutiny ?? 0),
+      scrutinyMoney: attrs.scrutiny_money_gbp != null ? gbp(attrs.scrutiny_money_gbp) : undefined,
     };
   });
 

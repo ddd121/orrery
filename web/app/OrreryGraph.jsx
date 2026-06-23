@@ -438,6 +438,7 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
                     <circle r={Math.max(r, 22)} fill="transparent" />
                     <circle r={r * 2.3} fill={c} opacity={isSel || inTrace ? 0.3 : 0.12} style={n.importance >= 8 ? { animation: 'tw 4s ease-in-out infinite' } : undefined} />
                     {(isSel || inTrace) && <circle r={r + 6} fill="none" stroke={inTrace ? GOLD : c} strokeOpacity="0.9" strokeWidth="1.8" />}
+                    {n.scrutiny >= 0.7 && <circle r={r + 9} fill="none" stroke={VERM} strokeOpacity="0.85" strokeWidth="1.6" strokeDasharray="2 3" />}
                     <circle r={r} fill={c} stroke="rgba(255,255,255,0.7)" strokeWidth={isSel ? 2 : 1} />
                     <circle r={r * 0.42} cx={-r * 0.22} cy={-r * 0.22} fill="#fff" opacity="0.22" />
                     {showLabel && (
@@ -516,6 +517,11 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 17, fontWeight: 800, lineHeight: 1.2 }}>{selNode.name}</div>
                   <div style={{ fontSize: 12.5, color: MUTE, marginTop: 3 }}>{selNode.role}</div>
+                  {selNode.scrutiny >= 0.7 && (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 7, padding: '3px 9px', borderRadius: 6, background: 'rgba(229,101,75,0.14)', border: '1px solid rgba(229,101,75,0.5)', color: '#F0A593', fontSize: 11, fontFamily: MONO }}>
+                      <AlertTriangle size={12} /> Merits a look{selNode.scrutinyMoney ? ` · ${selNode.scrutinyMoney} in political money nearby` : ''}
+                    </div>
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: 6, flex: '0 0 auto' }}>
                   <IconBtn small onClick={(e) => { e.stopPropagation(); startTrace(); }}><Share2 size={16} /></IconBtn>
