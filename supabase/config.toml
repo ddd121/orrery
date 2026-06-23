@@ -1,0 +1,10 @@
+# Supabase project config — https://supabase.com/docs/guides/cli/config
+# Minimal on purpose: the CLI fills defaults for anything omitted. When you
+# link to your remote project, run:  supabase link --project-ref <your-ref>
+# (the <ref> from your project URL https://<ref>.supabase.co).
+
+project_id = "orrery"
+
+[db]
+# Match the remote Postgres major version (your project is on Postgres 17).
+major_version = 17

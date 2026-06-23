@@ -1,0 +1,28 @@
+[project]
+name = "orrery-pipeline"
+version = "0.1.0"
+description = "ORRERY ingestion, entity resolution, and confidence propagation. Writes the resolved graph the web app reads."
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  # Milestone 1 is scaffold-only; real dependencies are added per milestone.
+  "python-dotenv>=1.0",    # load .env (SUPABASE_DB_URL, ANTHROPIC_API_KEY, …)
+  "requests>=2.32",        # HTTP for source APIs (Companies House) — M2
+  "psycopg[binary]>=3.2",  # Postgres access to the shared Supabase database
+]
+
+# Added in later milestones (mapped here, enabled when needed):
+# [project.optional-dependencies]
+# resolution = [
+#   "splink>=4.0",        # probabilistic record linkage (Fellegi–Sunter) — M3
+#   "pandas>=2.2",
+#   "scikit-learn>=1.5",  # calibration: Platt scaling / isotonic regression — M3
+#   "jellyfish>=1.0",     # Double Metaphone + Jaro-Winkler name features — M3
+# ]
+# llm = ["anthropic>=0.40"]  # extraction, ambiguous-band adjudication, summaries
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["orrery_pipeline"]

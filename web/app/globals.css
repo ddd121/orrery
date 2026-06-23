@@ -1,0 +1,28 @@
+:root {
+  --gold: #e8b65a;
+  --text: #e8ecf6;
+  --muted: #8a93ad;
+  --bg: #0b1020;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  background: radial-gradient(
+    900px 640px at 50% -10%,
+    #131b34 0%,
+    #0b1020 54%,
+    #070a16 100%
+  );
+  color: var(--text);
+  font-family: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+  min-height: 100vh;
+}
