@@ -36,7 +36,7 @@ export async function loadGraph(): Promise<{
       .select("id, entity_type, canonical_name, display_name, category, attributes"),
     supabase
       .from("statements")
-      .select("subject_entity_id, object_entity_id, statement_type, confidence, strength"),
+      .select("subject_entity_id, object_entity_id, statement_type, confidence, strength, attributes"),
     supabase.from("statement_types").select("code, label"),
     supabase.from("entity_types").select("code, label, ui_color, ui_icon"),
   ]);
@@ -44,13 +44,23 @@ export async function loadGraph(): Promise<{
   const stLabel: Record<string, string> = {};
   for (const s of stypes.data ?? []) stLabel[s.code] = s.label;
 
+  const gbp = (n: number) =>
+    new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency: "GBP",
+      maximumFractionDigits: 0,
+    }).format(Number(n));
   const links: GraphLink[] = (stmts.data ?? []).map((s: any) => ({
     source: s.subject_entity_id,
     target: s.object_entity_id,
     rel: stLabel[s.statement_type] ?? s.statement_type,
     strength: Number(s.strength ?? 0),
     confidence: Number(s.confidence ?? 0),
-    method: "Companies House record",
+    method:
+      s.statement_type === "DONATED_TO"
+        ? "Electoral Commission record"
+        : "Companies House record",
+    amount: s.attributes?.amount_gbp != null ? gbp(s.attributes.amount_gbp) : undefined,
   }));
 
   const degree: Record<string, number> = {};
