@@ -37,12 +37,16 @@ env/
 supabase/.branches/
 supabase/.temp/
 
-# ── Local data dumps (raw CSV/PDF sources are not committed) ─
-/data/
-/.scratch/
+# ── Local data dumps + generated SQL (not committed) ─
+data/
+.scratch/
 
 # ── OS / editor ─────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
+
+# ── Test / verification artifacts ─
+.playwright-mcp/
+/orrery-*.png
