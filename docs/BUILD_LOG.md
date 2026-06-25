@@ -108,12 +108,16 @@ npx --yes cloudflared tunnel --url http://localhost:3000  # temporary public lin
    regenerated each run). Then **LLM adjudication** (`claude-api`) of the ambiguous band,
    combined with the statistical score (anchor on stats = hallucination guard). **Until
    fitted, `fuzzy_match.py` stays report-only — nothing inferred reaches the public graph.**
-2. **Register of Members' Financial Interests** (`interests-api.parliament.uk`) — the
-   richest scrutiny signal (MPs' declared directorships/shareholdings/donations) and the
-   data that creates real cross-register individuals + enables the §7 conflict-of-interest
-   motif. Likely needs LLM extraction for the messy free-text categories.
-3. **§7 inference + motifs:** transitive control, common control, the conflict-of-interest
-   composite flag (with sources, never a verdict).
+2. **Register of Members' Interests — DONE** (`ingestion/parliament_interests.py`):
+   extracts the structured `fields` (no LLM needed) → MP `OWNS`/`DIRECTOR_OF`/`ADVISER_TO`
+   company (shareholdings + employment) + donor `DONATED_TO` MP. 22 interests for 20 MPs
+   landed; visible in each MP's inspector (e.g. Allin-Khan→ITV plc, Adam→director of Sask
+   Optics Ltd). Run via the recompute pipeline (resolve_v3 → edges_v2 → scrutiny_v1).
+3. **§7 inference + motifs (NEXT):** transitive control, common control, the conflict-of-
+   interest composite flag (sources, never a verdict). Needs (a) **company-name fuzzy
+   matching** — interest-companies carry no CRN so they don't yet merge with CH companies
+   or EC donor-companies; (b) sector/contract data for the full motif. The interest
+   companies + donors are now candidate cross-register entities for the calibration gold set.
 4. **Scheduled refresh** (the 3 sources) + later CH streaming → motif-closing alerts (§8 anomaly).
 5. **Human-verified flywheel:** analyst confirm/reject on ambiguous merges → training data.
 6. **On-demand LLM summaries** of a path/flag → sourced neutral plain English.
