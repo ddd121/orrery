@@ -100,12 +100,14 @@ npx --yes cloudflared tunnel --url http://localhost:3000  # temporary public lin
 
 ## Roadmap (remaining — do in order)
 
-1. **Calibration (v1's last gap; NEXT).** Hand-labelled gold set of candidate person pairs
-   → fit Platt/isotonic → reliability diagram → set the merge threshold to a target
-   precision (~95%) → report precision. Turns `fuzzy_match.py` from report-only into a
-   trusted merge step. Build: `resolution/calibration.py` + a versioned gold-set file.
-   Then **LLM adjudication** (`claude-api`) of the ambiguous band, combined with the
-   statistical score (anchor on stats = the hallucination guard).
+1. **Calibration — MACHINERY DONE** (`resolution/calibration.py`: pure-Python isotonic
+   (PAVA) + reliability diagram + threshold-to-target-precision; self-tested — e.g. ≥95%
+   precision at score ≥ 0.90 on the synthetic set). **Remaining: fit it to a REAL gold set**,
+   which needs broader data (item 2) — the current slice has too few cross-source candidate
+   pairs to fit one honestly. Key the gold set by **stable mention-id pairs** (entity ids are
+   regenerated each run). Then **LLM adjudication** (`claude-api`) of the ambiguous band,
+   combined with the statistical score (anchor on stats = hallucination guard). **Until
+   fitted, `fuzzy_match.py` stays report-only — nothing inferred reaches the public graph.**
 2. **Register of Members' Financial Interests** (`interests-api.parliament.uk`) — the
    richest scrutiny signal (MPs' declared directorships/shareholdings/donations) and the
    data that creates real cross-register individuals + enables the §7 conflict-of-interest
