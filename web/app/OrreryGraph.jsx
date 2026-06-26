@@ -183,11 +183,10 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
   useEffect(() => {
     const sim = d3.forceSimulation(nodes)
       .force('link', d3.forceLink(links).id((d) => d.id).distance((l) => 70 + (1 - l.strength) * 88).strength((l) => 0.15 + l.strength * 0.35))
-      .force('charge', d3.forceManyBody().strength((d) => -200 - d.importance * 30))
-      .force('collide', d3.forceCollide((d) => radius(d) + 14))
-      .force('center', d3.forceCenter(600, 400))
-      .force('x', d3.forceX(600).strength(0.05))
-      .force('y', d3.forceY(400).strength(0.05))
+      .force('charge', d3.forceManyBody().strength((d) => -420 - d.importance * 55).distanceMax(900))
+      .force('collide', d3.forceCollide((d) => radius(d) + 16))
+      .force('x', d3.forceX(600).strength(0.07))
+      .force('y', d3.forceY(400).strength(0.08))
       .on('tick', () => setTick((t) => (t + 1) % 1e6));
     simRef.current = sim;
     return () => sim.stop();
@@ -212,10 +211,15 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
   }, [dims.w, dims.h, nodes, applyVp]);
 
   useEffect(() => {
-    if (fittedRef.current || !dims.w) return;
-    const t = setTimeout(() => { fit(); fittedRef.current = true; }, 1000);
+    if (!dims.w) return;
+    // (re)fit when the viewport width changes meaningfully. Fixes the graph fitting to a
+    // stale (mobile-sized) viewport on first paint and leaving a desktop screen mostly empty;
+    // also refits on window resize.
+    const t = setTimeout(() => {
+      if (Math.abs(dims.w - (fittedRef.current || 0)) > 40) { fit(); fittedRef.current = dims.w; }
+    }, 600);
     return () => clearTimeout(t);
-  }, [dims.w, fit]);
+  }, [dims.w, dims.h, fit]);
 
   /* ---- node drag (screen → sim coords through current viewport) ---- */
   const nodeMove = useCallback((e) => {
