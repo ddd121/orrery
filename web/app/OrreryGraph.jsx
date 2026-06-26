@@ -197,7 +197,7 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
     const ro = new ResizeObserver((es) => { const r = es[0].contentRect; setDims({ w: r.width, h: r.height }); });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [mounted]);
 
   /* fit graph to screen */
   const fit = useCallback(() => {
