@@ -113,11 +113,15 @@ npx --yes cloudflared tunnel --url http://localhost:3000  # temporary public lin
    company (shareholdings + employment) + donor `DONATED_TO` MP. 22 interests for 20 MPs
    landed; visible in each MP's inspector (e.g. Allin-Khan→ITV plc, Adam→director of Sask
    Optics Ltd). Run via the recompute pipeline (resolve_v3 → edges_v2 → scrutiny_v1).
-3. **§7 inference + motifs (NEXT):** transitive control, common control, the conflict-of-
-   interest composite flag (sources, never a verdict). Needs (a) **company-name fuzzy
-   matching** — interest-companies carry no CRN so they don't yet merge with CH companies
-   or EC donor-companies; (b) sector/contract data for the full motif. The interest
-   companies + donors are now candidate cross-register entities for the calibration gold set.
+3. **§7 conflict-of-interest flag — DONE v1** (`graph/motifs_v1.sql`): flags an MP holding
+   a directorship/shareholding while on a committee, surfaced with a red node ring + inspector
+   box, framed "merits a look" (e.g. Gideon Amos — property co + Planning/Renters committees;
+   Bayo Alaba — events cos + CMS committee). Run after `scrutiny_v1.sql` in the recompute.
+   **Remaining:** transitive/common-control motifs; **company-name fuzzy matching** (link
+   interest-companies ↔ donor cos ↔ CH — none carry a CRN); committee-remit↔interest-sector
+   overlap for precision; **provenance-label fix** (interest edges mislabel as "Companies
+   House" in graph.ts `method` — needs per-statement source). Broadening the seed will surface
+   many more conflicts + give the calibration its cross-register gold set.
 4. **Scheduled refresh** (the 3 sources) + later CH streaming → motif-closing alerts (§8 anomaly).
 5. **Human-verified flywheel:** analyst confirm/reject on ambiguous merges → training data.
 6. **On-demand LLM summaries** of a path/flag → sourced neutral plain English.
