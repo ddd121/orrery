@@ -122,7 +122,15 @@ def build_sql(members: list, doc_id: str):
 def main(argv):
     take = int(argv[1]) if len(argv) > 1 else 30
     doc_id = str(uuid.uuid4())
-    members = get(f"{MAPI}/api/Members/Search?IsCurrentMember=true&House=1&skip=0&take={take}").get("items", [])
+    members = []
+    skip = 0
+    while len(members) < take:  # Members Search API caps a page at 20 — page through it
+        batch = get(f"{MAPI}/api/Members/Search?IsCurrentMember=true&House=1&skip={skip}&take=20").get("items", [])
+        if not batch:
+            break
+        members.extend(batch)
+        skip += 20
+    members = members[:take]
     print(f"fetched {len(members)} MPs; pulling their registered interests…")
     sql, n_int = build_sql(members, doc_id)
     print(f"extracted {n_int} declared interests")
