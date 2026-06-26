@@ -96,7 +96,7 @@ def build_sql(members: list, doc_id: str):
             "id, source_document_id, statement_type, from_mention_id, to_mention_id, valid_from, valid_to, raw_attributes",
     }
     parts = [f"insert into public.source_documents (id, source_code, external_ref, url, title, content_hash, raw) values "
-             f"({s(doc_id)}, 'parliament_interests', 'members-current', {s(API + '/api/Members/Search')}, "
+             f"({s(doc_id)}, 'parliament', 'members-current', {s(API + '/api/Members/Search')}, "
              f"{s('UK Parliament — current members')}, null, null);"]
     for table in ("mentions", "relationship_assertions"):
         if rows[table]:
@@ -107,7 +107,15 @@ def build_sql(members: list, doc_id: str):
 def main(argv: list[str]) -> int:
     take = int(argv[1]) if len(argv) > 1 else 40
     doc_id = str(uuid.uuid4())
-    members = get(f"/api/Members/Search?IsCurrentMember=true&House=1&skip=0&take={take}").get("items", [])
+    members: list = []
+    skip = 0
+    while len(members) < take:  # the Members Search API caps page size at 20 — page through it
+        batch = get(f"/api/Members/Search?IsCurrentMember=true&House=1&skip={skip}&take=20").get("items", [])
+        if not batch:
+            break
+        members.extend(batch)
+        skip += 20
+    members = members[:take]
     print(f"fetched {len(members)} current MPs; pulling biographies…")
     sql, summary = build_sql(members, doc_id)
     print(f"records: {summary}")

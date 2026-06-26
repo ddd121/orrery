@@ -122,6 +122,20 @@ npx --yes cloudflared tunnel --url http://localhost:3000  # temporary public lin
    overlap for precision; **provenance-label fix** (interest edges mislabel as "Companies
    House" in graph.ts `method` — needs per-statement source). Broadening the seed will surface
    many more conflicts + give the calibration its cross-register gold set.
+
+   **To broaden the seed (loaders are NOT idempotent — do this cleanly):** `source_documents`
+   has a unique `(source_code, external_ref)`, so re-running a loader raises `23505` and writes
+   nothing (atomic — safe, the graph is untouched). (`parliament.py` is now FIXED: it pages past
+   the Members API's 20-row cap, and writes `source_code='parliament'` not `parliament_interests`;
+   the `parliament` source row + its migration `20260626120000_add_parliament_source.sql` are in.)
+   The clean re-ingest, in order — note (a)+(b) briefly empty the graph, so run it in one go:
+   (a) `truncate statement_assertions, statements, mention_resolutions, canonical_entities cascade;`
+   (b) delete prior raw: `delete from relationship_assertions / mentions / source_documents
+   where source_code in ('parliament','parliament_interests')` (children first — check FK cascade);
+   (c) re-run `parliament` + `parliament_interests` loaders with a larger take;
+   (d) recompute via **MCP** `execute_sql` (NOT `apply_sql` — it splits on blank lines and chokes
+   on the commented multi-statement files): resolve_v3 → edges_v2 → scrutiny_v1 → motifs_v1.
+   Best done with fresh context — it's ~8 steps and the truncate makes the graph briefly empty.
 4. **Scheduled refresh** (the 3 sources) + later CH streaming → motif-closing alerts (§8 anomaly).
 5. **Human-verified flywheel:** analyst confirm/reject on ambiguous merges → training data.
 6. **On-demand LLM summaries** of a path/flag → sourced neutral plain English.
