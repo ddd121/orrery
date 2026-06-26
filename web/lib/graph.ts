@@ -10,6 +10,8 @@ export type GraphNode = {
   news: never[];
   scrutiny: number;
   scrutinyMoney?: string;
+  conflict?: boolean;
+  conflictReason?: string;
 };
 export type GraphLink = {
   source: string;
@@ -94,6 +96,8 @@ export async function loadGraph(): Promise<{
       news: [],
       scrutiny: Number(attrs.scrutiny ?? 0),
       scrutinyMoney: attrs.scrutiny_money_gbp != null ? gbp(attrs.scrutiny_money_gbp) : undefined,
+      conflict: attrs.conflict_flag === true,
+      conflictReason: attrs.conflict_reason ?? undefined,
     };
   });
 
