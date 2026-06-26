@@ -341,6 +341,28 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
   const clearTrace = () => { setTracePath(null); setTraceMode(false); setTraceFrom(null); };
   const toggleType = (t) => setActive((p) => { const n = new Set(p); n.has(t) ? n.delete(t) : n.add(t); return n; });
 
+  /* fly to an entity and select it (used by the browse/search panel) */
+  const focusOn = (id) => {
+    const n = nodeById[id]; if (!n) return;
+    const k = 1.15;
+    applyVp({ k, x: dims.w / 2 - (n.x || 0) * k, y: dims.h / 2 - (n.y || 0) * k });
+    setSelected(id); setSheetUp(false);
+  };
+  /* entities ranked by what merits a look: conflicts first, then scrutiny, then connectedness */
+  const ranked = useMemo(() => {
+    const l = [...nodes];
+    l.sort((a, b) =>
+      (Number(!!b.conflict) - Number(!!a.conflict)) ||
+      ((b.scrutiny || 0) - (a.scrutiny || 0)) ||
+      (b.importance - a.importance) ||
+      a.name.localeCompare(b.name));
+    return l;
+  }, [nodes]);
+  const panelList = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (q ? ranked.filter((n) => n.name.toLowerCase().includes(q)) : ranked).slice(0, 80);
+  }, [ranked, search]);
+
   const SAFE = { fontFamily: SANS };
 
   if (!mounted) return <div style={{ position: 'fixed', inset: 0, background: 'radial-gradient(900px 640px at 50% -10%, #131b34 0%, #0B1020 54%, #070a16 100%)' }} />;
@@ -392,13 +414,7 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
           style={{ width: '100%', background: `linear-gradient(90deg, ${GOLD} ${threshold}%, rgba(255,255,255,.12) ${threshold}%)` }} />
       </div>
 
-      {searchOpen && (
-        <div className="in" style={{ flex: '0 0 auto', padding: '0 14px 11px', position: 'relative' }}>
-          <Search size={15} color={MUTE} style={{ position: 'absolute', left: 26, top: 11 }} />
-          <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Find a name…"
-            style={{ width: '100%', height: 38, padding: '0 14px 0 36px', borderRadius: 10, color: TEXT, fontSize: 15, background: 'rgba(255,255,255,0.05)', border: `1px solid ${HAIR}`, outline: 'none' }} />
-        </div>
-      )}
+      {/* search/browse panel renders inside the graph area (below) */}
 
       {/* ---------- GRAPH ---------- */}
       <div ref={graphRef} style={{ position: 'relative', flex: 1, overflow: 'hidden', touchAction: 'none', cursor: traceMode ? 'crosshair' : 'default' }}>
@@ -463,6 +479,40 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
           <Crosshair size={19} />
         </button>
 
+        {/* ---------- BROWSE / SEARCH PANEL — the way in ---------- */}
+        {searchOpen && (
+          <div className="in" style={{ position: 'absolute', top: 12, left: 12, bottom: 12, width: 296, zIndex: 30, display: 'flex', flexDirection: 'column', borderRadius: 14, background: PANEL, border: `1px solid ${HAIR}`, backdropFilter: 'blur(13px)', WebkitBackdropFilter: 'blur(13px)', overflow: 'hidden', boxShadow: '0 18px 55px rgba(0,0,0,0.5)' }}>
+            <div style={{ padding: '11px 11px 9px', borderBottom: `1px solid ${HAIR}` }}>
+              <div style={{ position: 'relative' }}>
+                <Search size={14} color={MUTE} style={{ position: 'absolute', left: 10, top: 11 }} />
+                <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search people, companies, MPs…"
+                  style={{ width: '100%', height: 36, padding: '0 30px', borderRadius: 9, color: TEXT, fontSize: 13.5, background: 'rgba(255,255,255,0.06)', border: `1px solid ${HAIR}`, outline: 'none', boxSizing: 'border-box' }} />
+                {search && <X size={15} color={MUTE} onClick={() => setSearch('')} style={{ position: 'absolute', right: 9, top: 10, cursor: 'pointer' }} />}
+              </div>
+              <div className="eb" style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                {search.trim()
+                  ? `${panelList.length} match${panelList.length === 1 ? '' : 'es'}`
+                  : <><AlertTriangle size={11} color={VERM} /> Start at the top — sorted by what merits a look</>}
+              </div>
+            </div>
+            <div className="sc" style={{ flex: 1, overflowY: 'auto', padding: '5px' }}>
+              {panelList.map((n) => (
+                <div key={n.id} onClick={() => focusOn(n.id)} title={n.role}
+                  style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 9px', borderRadius: 9, cursor: 'pointer', background: selected === n.id ? 'rgba(232,182,90,0.16)' : 'transparent' }}>
+                  <span style={{ width: 9, height: 9, borderRadius: '50%', flex: '0 0 auto', background: (TYPE[n.type] || {}).color || MUTE }} />
+                  <span style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                    <span style={{ display: 'block', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.name}</span>
+                    <span style={{ display: 'block', fontSize: 10.5, color: MUTE, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.role}</span>
+                  </span>
+                  {n.conflict ? <AlertTriangle size={13} color={VERM} style={{ flex: '0 0 auto' }} />
+                    : n.scrutiny >= 0.7 ? <span style={{ width: 7, height: 7, borderRadius: '50%', background: VERM, opacity: 0.75, flex: '0 0 auto' }} /> : null}
+                </div>
+              ))}
+              {!panelList.length && <div style={{ padding: '16px 10px', fontSize: 12.5, color: MUTE }}>No match. Try a surname, a company, or a party.</div>}
+            </div>
+          </div>
+        )}
+
         {/* trace status / result — top of graph, clear of the sheet */}
         {(traceMode || tracePath) && (
           <div className="in sc" style={{ position: 'absolute', top: 12, left: 12, right: 66, maxHeight: 70, overflowX: 'auto',
@@ -498,8 +548,12 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
 
         {/* hint + example (only when nothing selected) */}
         {!selNode && !traceMode && (
-          <div className="in" style={{ position: 'absolute', bottom: 16, left: 12, right: 12, display: 'flex', gap: 9, alignItems: 'center', justifyContent: 'center' }}>
-            <span style={{ fontSize: 12.5, color: MUTE, padding: '8px 13px', borderRadius: 20, background: PANEL, border: `1px solid ${HAIR}`, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)' }}>Tap an entity · pinch to zoom</span>
+          <div className="in" style={{ position: 'absolute', bottom: 16, left: 12, right: 12, display: 'flex', gap: 9, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
+            {!searchOpen && (
+              <button onClick={() => setSearchOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 20, background: GOLD, border: `1px solid ${GOLD}`, color: '#1A1206', fontSize: 13, fontWeight: 700 }}>
+                <Search size={15} /> Start here · search &amp; leads
+              </button>
+            )}
             <button onClick={runExample} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 20, background: 'rgba(232,182,90,0.14)', border: `1px solid rgba(232,182,90,0.45)`, color: GOLD, fontSize: 13, fontWeight: 600 }}>
               <Share2 size={15} /> Example trail
             </button>
