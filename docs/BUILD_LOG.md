@@ -59,13 +59,16 @@ npx --yes cloudflared tunnel --url http://localhost:3000  # temporary public lin
 
 ## Data state (last run)
 
-- 3 sources; ~259 canonical entities, ~290 statements.
+- **4 sources; 495 canonical entities, 639 statements** (after the 60-MP broaden, 2026-06-26).
 - Seed: Halma (`00040932`) + Aggreko group; donor companies **Ecotricity `03043412`,
   Quadrature `09516131`, Phoenix Partnership `04077829`, Access Industries `05035508`**;
-  EC top-40 donations of 2024; 20 current MPs (+ biographies).
+  EC top-40 donations of 2024; **60 current MPs** (+ biographies) and their registered interests.
 - **Money ↔ power connects:** Labour = 15 corporate donors / £13.8M / 12 MP members.
   Ecotricity → £1M → Labour + its 14 directors (incl. Dale Vince). Phoenix → £5M → Conservatives.
-- Scrutiny: 87 entities flagged (≥0.7), neutral corporate group at 0, no bill/committee noise.
+- Scrutiny: 127 entities flagged (≥0.7). **§7 conflict-of-interest: 8 MPs flagged** — Amos
+  (property + Planning/Renters), Alaba (events + CMS), Bhatti (two cos + Procurement/Telecoms/
+  Health bills), Aquarone (trading/data cos + Data Bill), Barclay (advisory co + Public Accounts),
+  Begum, Akehurst, Atkinson. Rebuild any time with `python -m orrery_pipeline.recompute build`.
 - Fuzzy matcher: **0 cross-source person matches** in this slice (nothing inferred goes
   public); catches within-source dedup (two-id Kennerley; CH officer-vs-PSC name variants).
 
