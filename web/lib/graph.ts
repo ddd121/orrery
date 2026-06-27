@@ -26,6 +26,14 @@ export type GraphLink = {
 };
 export type TypeConfig = Record<string, { label: string; color: string; icon: string }>;
 
+/** Human label for each register, keyed by source_documents.source_code. */
+const SOURCE_LABEL: Record<string, string> = {
+  companies_house: "Companies House",
+  electoral_commission: "Electoral Commission",
+  parliament: "Parliament (Members API)",
+  parliament_interests: "Register of Members' Interests",
+};
+
 /**
  * Reads the resolved graph (canonical entities + scored statements) from Supabase
  * and maps it into the {nodes, links, types} the force-graph UI expects. Read-only,
@@ -63,9 +71,11 @@ export async function loadGraph(): Promise<{
     strength: Number(s.strength ?? 0),
     confidence: Number(s.confidence ?? 0),
     method:
-      s.statement_type === "DONATED_TO"
-        ? "Electoral Commission record"
-        : "Companies House record",
+      Array.isArray(s.attributes?.sources) && s.attributes.sources.length
+        ? s.attributes.sources.map((c: string) => SOURCE_LABEL[c] ?? c).join(" + ")
+        : s.statement_type === "DONATED_TO"
+          ? "Electoral Commission record"
+          : "Companies House record",
     amount: s.attributes?.amount_gbp != null ? gbp(s.attributes.amount_gbp) : undefined,
   }));
 

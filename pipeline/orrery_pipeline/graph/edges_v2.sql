@@ -12,7 +12,8 @@ with mapped as (
          obj.canonical_entity_id as obj,
          ra.valid_from, ra.valid_to,
          src.reliability_prior * least(sub.match_confidence, obj.match_confidence) as asrt_conf,
-         (ra.raw_attributes->>'value_gbp')::numeric as amount
+         (ra.raw_attributes->>'value_gbp')::numeric as amount,
+         sd.source_code as source_code
   from public.relationship_assertions ra
   join public.mention_resolutions sub on sub.mention_id = ra.from_mention_id and sub.is_active
   join public.mention_resolutions obj on obj.mention_id = ra.to_mention_id and obj.is_active
@@ -25,7 +26,8 @@ edges as (
          min(valid_from) as vfrom,
          case when bool_or(valid_to is null) then null else max(valid_to) end as vto,
          max(asrt_conf) as confidence,
-         max(amount) as amount_gbp
+         max(amount) as amount_gbp,
+         array_agg(distinct source_code) as sources
   from mapped
   group by statement_type, subj, obj
 )
@@ -33,8 +35,9 @@ insert into public.statements
   (subject_entity_id, statement_type, object_entity_id, valid_from, valid_to,
    attributes, confidence, strength, resolution_version, computed_at)
 select e.subj, e.statement_type, e.obj, e.vfrom, e.vto,
-       case when e.amount_gbp is not null
-            then jsonb_build_object('amount_gbp', e.amount_gbp) else '{}'::jsonb end,
+       jsonb_build_object('sources', to_jsonb(e.sources))
+         || case when e.amount_gbp is not null
+                 then jsonb_build_object('amount_gbp', e.amount_gbp) else '{}'::jsonb end,
        round(e.confidence::numeric, 4),
        round(greatest(0, least(1,
          st.type_weight
