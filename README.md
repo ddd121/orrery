@@ -6,27 +6,43 @@ The moat is not the data (public) or the API list (copyable). It is three things
 
 ## Status
 
-**Milestone 1 — scaffold + statement-based schema.** UK only. The build proceeds one milestone at a time (see the build order in [`CLAUDE.md`](CLAUDE.md)); do not add sources or features beyond the current milestone.
+**The engine and a findings-first product are live (UK).** Four public registers — Companies House, the Electoral Commission, UK Parliament (members), and the Register of Members' Financial Interests — ingest, resolve, and connect through one pipeline (resolve → confidence/strength → §7 conflict-of-interest salience → scrutiny). Current slice: **~840 entities, ~1,400 sourced statements, 21 ranked conflict-of-interest leads** — e.g. an MP shaping housing law who owns a property company ("merits a look", never a verdict).
+
+The full roadmap, data state, and resume guide live in **[`docs/BUILD_LOG.md`](docs/BUILD_LOG.md)**; the milestone order and guardrails in **[`CLAUDE.md`](CLAUDE.md)**. UK-first by design — international expansion is planned behind the same jurisdiction-agnostic schema (see the *Expansion roadmap* in the build log).
+
+## Using it
+
+ORRERY is **findings-first**, not a graph to decode. Three things a visitor does:
+
+- **Surface** — land on a board of *what merits a look*: conflict-of-interest leads and the money behind the parties, sourced and ranked.
+- **Look up** — search any figure or company → a dossier of its ties grouped in plain English, every line citing its source and confidence, with a small focused network picture.
+- **Connect** — trace the sourced path between two names, hop by hop.
+
+The full 800+-node network is an opt-in **Explore** view; the default views stay small and legible.
 
 ## Layout
 
 ```
-docs/        The PRD, the engine spec, and the UI prototype (docs/prototype/orrery.jsx)
+docs/        PRD, engine spec, BUILD_LOG (roadmap + resume), UI prototype
 supabase/    Postgres schema as migrations (the statement-based data model)
-web/         Next.js + TypeScript app — reads the resolved graph (UI wired in M5)
-pipeline/    Python ingestion + resolution + propagation — writes the resolved graph
+web/         Next.js + TypeScript app — reads the resolved graph
+               app/OrreryApp.jsx · app/views/* (Home, Entity) · app/components/ForceGraph.jsx
+               app/OrreryGraph.jsx (the opt-in full-network Explore view)
+               lib/graph.ts (loader) · lib/graph-utils.ts (findPath, leads, ties)
+pipeline/    Python — ingestion loaders · resolution/edges/scrutiny/§7 SQL · recompute.py
 ```
 
 The boundary is deliberate and clean: **the Python pipeline writes the resolved graph; the TypeScript app reads it.** They share one Supabase Postgres.
 
-## Setup (MVP / Tier 1)
+## Run
 
-1. Create a Supabase project (Postgres + pgvector). Copy `.env.example` → `.env.local` (web) / `.env` (pipeline) and fill in the keys.
-2. Apply the database migrations in `supabase/migrations/` (via the Supabase CLI `db push`, or the Supabase MCP). Service role key stays server-side only.
-3. (Later milestones) `web/`: `npm install && npm run dev`. `pipeline/`: a Python 3.12 venv under WSL2 — see [`pipeline/README.md`](pipeline/README.md).
+- **App:** `npm install --prefix web && npm run dev --prefix web` → http://localhost:3000
+- **Rebuild the resolved graph** (after new data lands): `python -m orrery_pipeline.recompute build`
+  (`recompute reset` + the loaders re-ingest from scratch — see the build log for the clean sequence).
+- Secrets live in `.env` / `web/.env.local` (gitignored); template in `.env.example`. The service-role key is server/pipeline only — **never the browser**.
 
-Tier-1 accounts needed: Supabase, an Anthropic API key, a (free) Companies House API key. Electoral Commission and UK Parliament need no key.
+Accounts/keys: Supabase, an Anthropic API key (for later LLM adjudication/summaries), a free Companies House key. The Electoral Commission and UK Parliament APIs need no key.
 
 ## The line we hold
 
-Facts, not verdicts. Every node and edge links back to a primary source. High precision over recall — a false link is a critical failure. No predictions of future outcomes, ever.
+Facts, not verdicts. Every node and edge links back to a primary source. High precision over recall — a false link is a critical failure. No predictions of future outcomes, ever. British English throughout.
