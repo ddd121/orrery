@@ -59,16 +59,20 @@ npx --yes cloudflared tunnel --url http://localhost:3000  # temporary public lin
 
 ## Data state (last run)
 
-- **4 sources; 495 canonical entities, 639 statements** (after the 60-MP broaden, 2026-06-26).
+- **4 sources; 839 canonical entities, 1,435 statements** (after the 150-MP broaden, 2026-06-27).
+  At ~840 nodes the hand-rolled SVG is at its comfort limit — the react-force-graph/Sigma swap
+  (roadmap item 7) is now genuinely warranted before going much wider; the browse panel is what
+  keeps it navigable for now.
 - Seed: Halma (`00040932`) + Aggreko group; donor companies **Ecotricity `03043412`,
   Quadrature `09516131`, Phoenix Partnership `04077829`, Access Industries `05035508`**;
-  EC top-40 donations of 2024; **60 current MPs** (+ biographies) and their registered interests.
+  EC top-40 donations of 2024; **150 current MPs** (+ biographies) and their registered interests.
 - **Money ↔ power connects:** Labour = 15 corporate donors / £13.8M / 12 MP members.
   Ecotricity → £1M → Labour + its 14 directors (incl. Dale Vince). Phoenix → £5M → Conservatives.
-- Scrutiny: 127 entities flagged (≥0.7). **§7 conflict-of-interest (`motifs_v2.sql`, salience-ranked): 8 MPs** —
-  STRONG remit↔sector overlap: Amos (housing), Alaba (media), Aquarone (data/tech), Barclay (finance);
-  MEDIUM: Bhatti; LOW (party-political / dormant / eponymous — demoted): Begum, Atkinson, Akehurst.
-  Rebuild any time with `python -m orrery_pipeline.recompute build`.
+- **§7 conflict-of-interest (`motifs_v2.sql`, salience-ranked): 21 MPs flagged — 5 strong / 12 medium / 4 low.**
+  STRONG remit↔sector overlap: Amos (housing), Brash (housing), Alaba (media), Aquarone (data/tech),
+  Barclay (finance). The 12 medium are commercial interests whose sector isn't in the company name —
+  the SIC-code / interest-description sector step would promote the genuine ones. Per-edge provenance
+  (`attributes.sources`) labels every link by its real register. Rebuild: `recompute build`.
 - Fuzzy matcher: **0 cross-source person matches** in this slice (nothing inferred goes
   public); catches within-source dedup (two-id Kennerley; CH officer-vs-PSC name variants).
 
