@@ -158,3 +158,42 @@ npx --yes cloudflared tunnel --url http://localhost:3000  # temporary public lin
    first-run welcome (auto-once via localStorage) answers what/where-to-start with a "Show me the
    leads →" CTA into the ranked list; the panel is the way in, the SVG is the backdrop. The
    canvas/WebGL lib is the real fix for rendering thousands of nodes smoothly + de-hairballing.
+
+## UX redesign — findings-first (shipped 2026-06-27)
+
+The app was graph-first (land on an 839-node hairball, click random nodes). Reframed to
+**findings-first / search-led**, reusing the engine (no data/schema change). New IA in `web/`:
+- `page.tsx` → `OrreryApp.jsx` (client shell; `view` = home | entity | explore; sticky header + global search).
+- `views/HomeView.jsx` — **the landing**: hero search + a "what merits a look" board (conflict cards
+  strong-first + "the money behind the parties") + a live credibility strip + a cheap CSS-drift
+  backdrop (no force sim). No auto-welcome modal.
+- `views/EntityView.jsx` — **dossier**: conflict banner + ties grouped in plain English (confidence +
+  "via {source}" per row) + a small focused ego-graph.
+- `components/ForceGraph.jsx` — reusable lightweight d3 (backdrop | focused; headless pre-warm; NO timer).
+- `lib/graph-utils.ts` — shared tokens + `findPath`, `leads()`, `tiesOf()`.
+- `OrreryGraph.jsx` kept as the opt-in **Explore** full-network view (+ `initialFocusId`).
+- **Gotcha:** running `next build` while `next dev` is live corrupts `.next` ("outdated Webpack" /
+  "a[d] is not a function"). Fix: kill :3000, `rm -rf web/.next`, restart `npm run dev`.
+
+**M4 (in progress):** the A→B **connection finder** — dual entity search → `findPath` → a left-to-right
+sourced path chain ("A —donated £4m→ Co —director→ B") + a focused path graph. Currently a "soon" stub
+on Home + dossier; `findPath` is already in `graph-utils.ts`.
+
+## Expansion roadmap (to be genuinely useful — beyond the UK demo)
+
+The engine + UX work; the gap to "useful" is **coverage + scale + trust**:
+- **More UK sources (depth):** Contracts Finder (public contracts — this *closes the loop*:
+  donor → party → minister → contract); lobbying / APPG registers; Land Registry / property; court &
+  insolvency. Each new source re-runs through the same resolve → edges → scrutiny → motifs pipeline.
+- **Scale (breadth):** all 650 MPs + Lords + a far larger CH/EC slice → the **graph-lib swap** (item 7)
+  and Postgres → Neo4j AuraDB for deep traversal become load-bearing, not optional.
+- **International:** the model is jurisdiction-agnostic (mention → canonical → statement). Expand via
+  per-jurisdiction loaders + a `jurisdiction` dimension (EU Transparency Register; OpenCorporates for
+  cross-border company graphs; US FEC/lobbying; ICIJ/OCCRP leak datasets). UK-first proves the engine,
+  then add jurisdictions one at a time behind the same schema. *Do not ingest every global source on
+  day one* (PRD guardrail).
+- **The moat (trust):** the calibrated gold set + LLM adjudication (item 1) turns cross-register
+  *person* matching from report-only into trusted merges — **required before international**, where
+  name collisions explode.
+- **Live + flywheel:** scheduled refresh + CH streaming change-alerts (item 4); analyst confirm/reject
+  flywheel (item 5); on-demand neutral LLM summaries (item 6).
