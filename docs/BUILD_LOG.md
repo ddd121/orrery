@@ -59,7 +59,12 @@ npx --yes cloudflared tunnel --url http://localhost:3000  # temporary public lin
 
 ## Data state (last run)
 
-- **4 sources; 839 canonical entities, 1,435 statements** (after the 150-MP broaden, 2026-06-27).
+- **5 sources** (Companies House · Electoral Commission · Parliament members · Register of Members'
+  Interests · **Contracts Finder**); 839 entities + contract buyers, 1,435 statements + **21
+  `CONTRACTED_WITH` edges** (150-MP broaden + contracts, 2026-06-27). **Closed loop:** Ecotricity
+  donated £1m → Labour AND holds 13 public contracts — donor + government contractor in one entity.
+  (Contracts Finder loader: keyless OCDS; matches suppliers by name then stamps our verified CRN so
+  resolve_v3 attaches to the existing company; re-run = delete prior `contracts_finder` raw first.)
   At ~840 nodes the hand-rolled SVG is at its comfort limit — the react-force-graph/Sigma swap
   (roadmap item 7) is now genuinely warranted before going much wider; the browse panel is what
   keeps it navigable for now.
