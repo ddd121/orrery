@@ -175,9 +175,11 @@ The app was graph-first (land on an 839-node hairball, click random nodes). Refr
 - **Gotcha:** running `next build` while `next dev` is live corrupts `.next` ("outdated Webpack" /
   "a[d] is not a function"). Fix: kill :3000, `rm -rf web/.next`, restart `npm run dev`.
 
-**M4 (in progress):** the A→B **connection finder** — dual entity search → `findPath` → a left-to-right
+**M4 — DONE (2026-06-27, `web/app/views/ConnectView.jsx`):** the A→B **connection finder** — dual entity search → `findPath` → a left-to-right
 sourced path chain ("A —donated £4m→ Co —director→ B") + a focused path graph. Currently a "soon" stub
-on Home + dossier; `findPath` is already in `graph-utils.ts`.
+live from the Home hero, the header "Connect", and each dossier's "Find a path from here";
+no-path → lower-threshold fallback. Verified: Cowling → Ecotricity (Director, 97%, CH) → Labour
+(Donated £1m, 97%, EC). **The findings-first redesign is complete: Home · Dossier · Connect · Explore.**
 
 ## Expansion roadmap (to be genuinely useful — beyond the UK demo)
 
