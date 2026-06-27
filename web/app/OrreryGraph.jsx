@@ -127,7 +127,7 @@ function findPath(fromId, toId, links, thresh) {
 const PEEK = 150; // px of sheet visible when collapsed
 
 /* ================================ APP ================================ */
-export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types: TYPE }) {
+export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types: TYPE, initialFocusId = null, autoWelcome = true }) {
   const nodes = useMemo(() => RAW_NODES.map((n, i) => ({
     ...n, x: 600 + Math.cos(i * 1.3) * 150 + Math.random() * 24, y: 400 + Math.sin(i * 1.3) * 150 + Math.random() * 24,
   })), []);
@@ -205,15 +205,18 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
     return () => ro.disconnect();
   }, [mounted]);
 
-  // first-time visitors get the welcome automatically (once); the ⓘ button reopens it
+  // first-time visitors get the welcome automatically (once); the ⓘ button reopens it.
+  // Suppressed when embedded as the opt-in Explore view — the redesign drops the
+  // auto-welcome there (its "how to read" lives in the app header instead).
   useEffect(() => {
+    if (!autoWelcome) return;
     try {
       if (!localStorage.getItem('orrery_welcomed')) {
         setShowInfo(true);
         localStorage.setItem('orrery_welcomed', '1');
       }
     } catch { /* private mode / SSR */ }
-  }, []);
+  }, [autoWelcome]);
 
   /* fit graph to screen */
   const fit = useCallback(() => {
@@ -366,6 +369,18 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
     applyVp({ k, x: dims.w / 2 - (n.x || 0) * k, y: dims.h / 2 - (n.y || 0) * k });
     setSelected(id); setSheetUp(false);
   };
+
+  /* when launched from "Explore in the full network", land focused on that entity.
+     Fire once, after the layout has warmed (node has a position) and the viewport
+     is sized. Guarded by a ref so it never re-runs. */
+  const focusedOnceRef = useRef(false);
+  useEffect(() => {
+    if (focusedOnceRef.current || !initialFocusId) return;
+    const n = nodeById[initialFocusId];
+    if (!n || !dims.w || n.x == null) return;
+    const t = setTimeout(() => { focusOn(initialFocusId); focusedOnceRef.current = true; }, 650);
+    return () => clearTimeout(t);
+  }, [initialFocusId, dims.w, nodeById]);
   /* entities ranked by what merits a look: conflicts first, then scrutiny, then connectedness */
   const ranked = useMemo(() => {
     const sr = { strong: 0, medium: 1, low: 2 };
