@@ -59,6 +59,12 @@ npx --yes cloudflared tunnel --url http://localhost:3000  # temporary public lin
 
 ## Data state (last run)
 
+- **2026-06-27 — broadened to the full Commons (650 MPs):** **2,074 entities, 5,800 statements, 5 sources**;
+  **95 conflict-of-interest leads (24 strong / 61 medium / 10 low)**. Dedup residual: 58 redundant
+  persons / 31 clusters (harder same-name cases, left for the calibrated matcher). **Scale fix:**
+  `loadGraph` was truncating at Supabase's 1,000-row response cap → now pages through entities +
+  statements (`web/lib/graph.ts`). The bullets below are the earlier 150-MP slice (kept for context).
+
 - **5 sources** (Companies House · Electoral Commission · Parliament members · Register of Members'
   Interests · **Contracts Finder**); 839 entities + contract buyers, 1,435 statements + **21
   `CONTRACTED_WITH` edges** (150-MP broaden + contracts, 2026-06-27). **Closed loop:** Ecotricity
