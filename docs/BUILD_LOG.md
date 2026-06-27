@@ -65,10 +65,10 @@ npx --yes cloudflared tunnel --url http://localhost:3000  # temporary public lin
   EC top-40 donations of 2024; **60 current MPs** (+ biographies) and their registered interests.
 - **Money ↔ power connects:** Labour = 15 corporate donors / £13.8M / 12 MP members.
   Ecotricity → £1M → Labour + its 14 directors (incl. Dale Vince). Phoenix → £5M → Conservatives.
-- Scrutiny: 127 entities flagged (≥0.7). **§7 conflict-of-interest: 8 MPs flagged** — Amos
-  (property + Planning/Renters), Alaba (events + CMS), Bhatti (two cos + Procurement/Telecoms/
-  Health bills), Aquarone (trading/data cos + Data Bill), Barclay (advisory co + Public Accounts),
-  Begum, Akehurst, Atkinson. Rebuild any time with `python -m orrery_pipeline.recompute build`.
+- Scrutiny: 127 entities flagged (≥0.7). **§7 conflict-of-interest (`motifs_v2.sql`, salience-ranked): 8 MPs** —
+  STRONG remit↔sector overlap: Amos (housing), Alaba (media), Aquarone (data/tech), Barclay (finance);
+  MEDIUM: Bhatti; LOW (party-political / dormant / eponymous — demoted): Begum, Atkinson, Akehurst.
+  Rebuild any time with `python -m orrery_pipeline.recompute build`.
 - Fuzzy matcher: **0 cross-source person matches** in this slice (nothing inferred goes
   public); catches within-source dedup (two-id Kennerley; CH officer-vs-PSC name variants).
 
@@ -116,10 +116,14 @@ npx --yes cloudflared tunnel --url http://localhost:3000  # temporary public lin
    company (shareholdings + employment) + donor `DONATED_TO` MP. 22 interests for 20 MPs
    landed; visible in each MP's inspector (e.g. Allin-Khan→ITV plc, Adam→director of Sask
    Optics Ltd). Run via the recompute pipeline (resolve_v3 → edges_v2 → scrutiny_v1).
-3. **§7 conflict-of-interest flag — DONE v1** (`graph/motifs_v1.sql`): flags an MP holding
-   a directorship/shareholding while on a committee, surfaced with a red node ring + inspector
-   box, framed "merits a look" (e.g. Gideon Amos — property co + Planning/Renters committees;
-   Bayo Alaba — events cos + CMS committee). Run after `scrutiny_v1.sql` in the recompute.
+3. **§7 conflict-of-interest flag — DONE v2** (`graph/motifs_v2.sql`, salience-ranked): flags an
+   MP holding a directorship/shareholding while on a committee, then scores it by whether the
+   committee remit overlaps the interest's SECTOR (transparent keyword lexicon) — `strong` overlap /
+   `medium` commercial-but-no-detectable-overlap / `low` (party-political, dormant, eponymous —
+   demoted). Surfaced with a strength-scaled red ring + a strength-aware inspector box that names
+   the overlapping sector; the browse list sorts strong-first. `recompute build` runs v2 (v1 kept
+   for history). Next precision step: use CH SIC codes / interest descriptions for sector instead
+   of name keywords (Bhatti is `medium` only because his company names don't reveal their sector).
    **Remaining:** transitive/common-control motifs; **company-name fuzzy matching** (link
    interest-companies ↔ donor cos ↔ CH — none carry a CRN); committee-remit↔interest-sector
    overlap for precision; **provenance-label fix** (interest edges mislabel as "Companies
