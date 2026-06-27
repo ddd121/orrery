@@ -44,13 +44,22 @@ export async function loadGraph(): Promise<{
   links: GraphLink[];
   types: TypeConfig;
 }> {
-  const [ents, stmts, stypes, etypes] = await Promise.all([
-    supabase
-      .from("canonical_entities")
-      .select("id, entity_type, canonical_name, display_name, category, attributes"),
-    supabase
-      .from("statements")
-      .select("subject_entity_id, object_entity_id, statement_type, confidence, strength, attributes"),
+  // Supabase/PostgREST caps a single response at 1,000 rows — page through the entity + statement
+  // tables (both exceed that at full-Commons scale) so the graph is never silently truncated.
+  const fetchAll = async (table: string, columns: string): Promise<any[]> => {
+    const out: any[] = [];
+    const size = 1000;
+    for (let from = 0; ; from += size) {
+      const { data, error } = await supabase.from(table).select(columns).range(from, from + size - 1);
+      if (error) throw error;
+      out.push(...(data ?? []));
+      if (!data || data.length < size) break;
+    }
+    return out;
+  };
+  const [entsRows, stmtsRows, stypes, etypes] = await Promise.all([
+    fetchAll("canonical_entities", "id, entity_type, canonical_name, display_name, category, attributes"),
+    fetchAll("statements", "subject_entity_id, object_entity_id, statement_type, confidence, strength, attributes"),
     supabase.from("statement_types").select("code, label"),
     supabase.from("entity_types").select("code, label, ui_color, ui_icon"),
   ]);
@@ -64,7 +73,7 @@ export async function loadGraph(): Promise<{
       currency: "GBP",
       maximumFractionDigits: 0,
     }).format(Number(n));
-  const links: GraphLink[] = (stmts.data ?? []).map((s: any) => ({
+  const links: GraphLink[] = stmtsRows.map((s: any) => ({
     source: s.subject_entity_id,
     target: s.object_entity_id,
     rel: stLabel[s.statement_type] ?? s.statement_type,
@@ -93,7 +102,7 @@ export async function loadGraph(): Promise<{
       icon: t.ui_icon ?? "User",
     };
 
-  const nodes: GraphNode[] = (ents.data ?? []).map((e: any) => {
+  const nodes: GraphNode[] = entsRows.map((e: any) => {
     const attrs = e.attributes ?? {};
     let role: string = e.category ?? allTypes[e.entity_type]?.label ?? e.entity_type;
     if (e.entity_type === "company" && attrs.company_number)
