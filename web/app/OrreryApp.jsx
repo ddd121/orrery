@@ -13,13 +13,14 @@
  * is code-split so it never weighs down the landing.
  */
 import React, { useMemo, useState, useRef, useEffect, lazy, Suspense } from 'react';
-import { Search, X, Compass, ArrowLeft, BookOpen } from 'lucide-react';
+import { Search, X, Compass, ArrowLeft, BookOpen, GitCompareArrows } from 'lucide-react';
 import {
   GOLD, VERM, TEXT, MUTE, HAIR, PANEL, MONO, SANS, BG,
   typeColor,
 } from '@/lib/graph-utils';
 import HomeView from './views/HomeView';
 import EntityView from './views/EntityView';
+import ConnectView from './views/ConnectView';
 
 const OrreryGraph = lazy(() => import('./OrreryGraph'));
 
@@ -41,6 +42,7 @@ export default function OrreryApp({ nodes, links, types }) {
   const [view, setView] = useState('home');
   const [entityId, setEntityId] = useState(null);
   const [exploreFocus, setExploreFocus] = useState(null);
+  const [connectFrom, setConnectFrom] = useState(null);
 
   const ranked = useMemo(() => rankNodes(nodes), [nodes]);
   const nodeById = useMemo(() => {
@@ -57,6 +59,11 @@ export default function OrreryApp({ nodes, links, types }) {
   };
   const openHome = () => { setView('home'); setEntityId(null); };
   const openExplore = (focusId) => { setExploreFocus(focusId || null); setView('explore'); };
+  const goConnect = (initialFromId) => {
+    setConnectFrom(initialFromId && nodeById[initialFromId] ? initialFromId : null);
+    setView('connect');
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
+  };
 
   /* ---- Explore is the full-screen original graph; render it bare (it owns the
      viewport, header and all) so we don't double up chrome. ---- */
@@ -104,6 +111,7 @@ export default function OrreryApp({ nodes, links, types }) {
         onPick={openEntity}
         onHome={openHome}
         onExplore={() => openExplore(null)}
+        onConnect={() => goConnect(null)}
       />
       <main style={{ flex: 1, width: '100%' }}>
         {view === 'home' && (
@@ -113,6 +121,7 @@ export default function OrreryApp({ nodes, links, types }) {
             types={types}
             onOpenEntity={openEntity}
             onExplore={() => openExplore(null)}
+            onConnect={() => goConnect(null)}
           />
         )}
         {view === 'entity' && entityId && (
@@ -124,6 +133,17 @@ export default function OrreryApp({ nodes, links, types }) {
             onOpenEntity={openEntity}
             onBack={openHome}
             onExplore={() => openExplore(entityId)}
+            onConnect={() => goConnect(entityId)}
+          />
+        )}
+        {view === 'connect' && (
+          <ConnectView
+            nodes={nodes}
+            links={links}
+            types={types}
+            onOpenEntity={openEntity}
+            onBack={openHome}
+            initialFromId={connectFrom}
           />
         )}
       </main>
@@ -132,7 +152,7 @@ export default function OrreryApp({ nodes, links, types }) {
 }
 
 /* ----------------------------- shared header ----------------------------- */
-function Header({ ranked, types, onPick, onHome, onExplore }) {
+function Header({ ranked, types, onPick, onHome, onExplore, onConnect }) {
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -225,6 +245,16 @@ function Header({ ranked, types, onPick, onHome, onExplore }) {
         )}
       </div>
 
+      <button
+        onClick={onConnect}
+        title="Find the connection between two names"
+        style={{
+          display: 'flex', alignItems: 'center', gap: 7, height: 36, padding: '0 12px', borderRadius: 9,
+          background: 'rgba(255,255,255,0.05)', border: `1px solid ${HAIR}`, color: MUTE, cursor: 'pointer', fontSize: 13, fontWeight: 600, flex: '0 0 auto',
+        }}
+      >
+        <GitCompareArrows size={16} /> <span className="hide-sm">Connect</span>
+      </button>
       <button
         onClick={onExplore}
         title="Open the full network"

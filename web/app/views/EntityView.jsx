@@ -22,7 +22,7 @@ import ForceGraph from '../components/ForceGraph';
 
 const EGO_CAP = 40;
 
-export default function EntityView({ entityId, nodes, links, types, onOpenEntity, onBack, onExplore }) {
+export default function EntityView({ entityId, nodes, links, types, onOpenEntity, onBack, onExplore, onConnect }) {
   const nodeById = useMemo(() => {
     const m = {};
     nodes.forEach((n) => (m[n.id] = n));
@@ -151,12 +151,13 @@ export default function EntityView({ entityId, nodes, links, types, onOpenEntity
               </button>
               <button
                 type="button"
-                disabled
-                title="Coming soon"
-                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, height: 44, borderRadius: 11, background: 'rgba(255,255,255,0.03)', border: `1px dashed ${HAIR}`, color: MUTE, fontSize: 13.5, fontWeight: 600, cursor: 'not-allowed', opacity: 0.75 }}
+                onClick={onConnect}
+                title="Find a path from this entity to another"
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, height: 44, borderRadius: 11, background: 'rgba(255,255,255,0.04)', border: `1px solid ${HAIR}`, color: TEXT, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}
+                onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(232,182,90,0.4)')}
+                onMouseLeave={(e) => (e.currentTarget.style.borderColor = HAIR)}
               >
                 <GitCompareArrows size={16} /> Find a path from here
-                <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase', color: GOLD, opacity: 0.85 }}>soon</span>
               </button>
             </div>
           </div>

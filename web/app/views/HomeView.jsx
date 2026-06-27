@@ -43,7 +43,7 @@ function backdropSubset(nodes, links, leadData, cap = 80) {
   return { subNodes, subLinks };
 }
 
-export default function HomeView({ nodes, links, types, onOpenEntity, onExplore }) {
+export default function HomeView({ nodes, links, types, onOpenEntity, onExplore, onConnect }) {
   const leadData = useMemo(() => leads(nodes, links), [nodes, links]);
   const { subNodes, subLinks } = useMemo(
     () => backdropSubset(nodes, links, leadData),
@@ -65,7 +65,7 @@ export default function HomeView({ nodes, links, types, onOpenEntity, onExplore 
           <p style={{ fontSize: 'clamp(14px, 2.4vw, 16px)', color: '#C7CEDF', lineHeight: 1.6, maxWidth: 620, margin: '0 auto 26px' }}>
             Search a public figure, company or party to see who funds them, who sits where, and how they connect — every link drawn from a public register, with an honest confidence.
           </p>
-          <HeroSearch nodes={nodes} types={types} onOpenEntity={onOpenEntity} />
+          <HeroSearch nodes={nodes} types={types} onOpenEntity={onOpenEntity} onConnect={onConnect} />
         </div>
       </section>
 
@@ -118,7 +118,7 @@ export default function HomeView({ nodes, links, types, onOpenEntity, onExplore 
 }
 
 /* ------------------------------- hero search ------------------------------- */
-function HeroSearch({ nodes, types, onOpenEntity }) {
+function HeroSearch({ nodes, types, onOpenEntity, onConnect }) {
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
   const boxRef = useRef(null);
@@ -189,19 +189,20 @@ function HeroSearch({ nodes, types, onOpenEntity }) {
         )}
       </div>
 
-      {/* Milestone 4 — disabled "coming soon" affordance for the A→B finder */}
+      {/* Milestone 4 — the A→B connection finder */}
       <button
         type="button"
-        disabled
-        title="Coming soon"
+        onClick={onConnect}
+        title="Find the connection between two names"
         style={{
           marginTop: 13, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 20,
-          background: 'rgba(255,255,255,0.03)', border: `1px dashed ${HAIR}`, color: MUTE, fontSize: 12.5, fontWeight: 600,
-          cursor: 'not-allowed', opacity: 0.75,
+          background: 'rgba(232,182,90,0.08)', border: `1px solid rgba(232,182,90,0.35)`, color: GOLD, fontSize: 12.5, fontWeight: 600,
+          cursor: 'pointer',
         }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(232,182,90,0.16)')}
+        onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(232,182,90,0.08)')}
       >
         <GitCompareArrows size={14} /> Find the connection between two names
-        <span style={{ fontFamily: MONO, fontSize: 9, letterSpacing: '.12em', textTransform: 'uppercase', color: GOLD, opacity: 0.85 }}>soon</span>
       </button>
     </div>
   );
