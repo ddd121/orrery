@@ -31,9 +31,12 @@ from urllib.parse import unquote, urlparse
 
 HERE = Path(__file__).resolve().parent
 
-# resolution -> edges -> scrutiny -> §7 conflict motifs. Order matters.
+# resolution -> graph-aware dedup -> edges -> scrutiny -> §7 conflict motifs. Order matters:
+# dedupe_v1 collapses duplicate canonical entities (§4.4 shared-neighbour pass) that resolve_v3
+# left split, so edges_v2 builds statements over the merged set.
 BUILD = [
     HERE / "resolution" / "resolve_v3.sql",
+    HERE / "resolution" / "dedupe_v1.sql",
     HERE / "graph" / "edges_v2.sql",
     HERE / "graph" / "scrutiny_v1.sql",
     HERE / "graph" / "motifs_v2.sql",
