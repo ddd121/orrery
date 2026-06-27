@@ -187,8 +187,14 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
       .force('collide', d3.forceCollide((d) => radius(d) + 16))
       .force('x', d3.forceX(600).strength(0.07))
       .force('y', d3.forceY(400).strength(0.08))
-      .on('tick', () => setTick((t) => (t + 1) % 1e6));
+      .stop(); // we drive ticks ourselves — no 60fps timer, so the CPU/fan stays idle once settled
     simRef.current = sim;
+    // Pre-warm the layout in one synchronous pass (no per-tick React render). A live force
+    // animation over ~800 nodes × ~5k SVG elements pins the CPU; this lays it out once, then paints.
+    const warm = Math.min(220, Math.max(120, Math.round(nodes.length / 4)));
+    for (let i = 0; i < warm; i++) sim.tick();
+    fittedRef.current = 0; // refit to the freshly-warmed layout
+    setTick((t) => (t + 1) % 1e6);
     return () => sim.stop();
   }, [nodes, links]);
 
@@ -198,6 +204,16 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
     ro.observe(el);
     return () => ro.disconnect();
   }, [mounted]);
+
+  // first-time visitors get the welcome automatically (once); the ⓘ button reopens it
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem('orrery_welcomed')) {
+        setShowInfo(true);
+        localStorage.setItem('orrery_welcomed', '1');
+      }
+    } catch { /* private mode / SSR */ }
+  }, []);
 
   /* fit graph to screen */
   const fit = useCallback(() => {
@@ -228,13 +244,16 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
     d.fx = (e.clientX - r.left - t.x) / t.k;
     d.fy = (e.clientY - r.top - t.y) / t.k;
     if (Math.hypot(e.clientX - startRef.current.x, e.clientY - startRef.current.y) > 5) movedRef.current = true;
+    const sim = simRef.current;
+    if (sim) { sim.alpha(0.3); sim.tick(); setTick((tk) => (tk + 1) % 1e6); } // one tick per move — no timer
   }, []);
   const nodeUp = useCallback(() => {
     window.removeEventListener('pointermove', nodeMove);
     window.removeEventListener('pointerup', nodeUp);
     const d = dragRef.current;
-    if (simRef.current) simRef.current.alphaTarget(0);
+    const sim = simRef.current;
     if (d) { d.fx = null; d.fy = null; if (!movedRef.current) activateRef.current(d); }
+    if (sim && movedRef.current) { for (let i = 0; i < 40; i++) sim.tick(); setTick((tk) => (tk + 1) % 1e6); } // settle once, headless
     dragRef.current = null;
   }, [nodeMove]);
   const nodeDown = useCallback((e, d) => {
@@ -242,7 +261,6 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
     rectRef.current = svgRef.current.getBoundingClientRect();
     dragRef.current = d; movedRef.current = false;
     startRef.current = { x: e.clientX, y: e.clientY };
-    if (simRef.current) simRef.current.alphaTarget(0.3).restart();
     d.fx = d.x; d.fy = d.y;
     window.addEventListener('pointermove', nodeMove);
     window.addEventListener('pointerup', nodeUp);
@@ -673,7 +691,7 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
 
       {/* sample marker (bottom-pinned, subtle) */}
       <div style={{ position: 'absolute', bottom: 6, left: '50%', transform: 'translateX(-50%)', zIndex: 5, pointerEvents: 'none',
-        fontFamily: MONO, fontSize: 9, letterSpacing: '.16em', color: 'rgba(240,165,147,0.5)' }}>PUBLIC RECORDS · COMPANIES HOUSE</div>
+        fontFamily: MONO, fontSize: 9, letterSpacing: '.16em', color: 'rgba(240,165,147,0.5)' }}>PUBLIC RECORDS · COMPANIES HOUSE · ELECTORAL COMMISSION · PARLIAMENT</div>
 
       {/* ---------- FILTERS POPOVER ---------- */}
       {filtersOpen && (
@@ -708,16 +726,25 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
           <div onClick={(e) => e.stopPropagation()} className="in sc" style={{ width: '100%', maxHeight: '86vh', overflowY: 'auto', padding: '24px 22px 30px', borderRadius: '18px 18px 0 0', background: '#0E1426', border: `1px solid ${HAIR}` }}>
             <div style={{ width: 38, height: 4, borderRadius: 4, background: 'rgba(190,200,230,0.3)', margin: '0 auto 18px' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div style={{ fontSize: 19, fontWeight: 800 }}>How to read ORRERY</div>
+              <div style={{ fontSize: 20, fontWeight: 800 }}>What is ORRERY?</div>
               <X size={22} color={MUTE} onClick={() => setShowInfo(false)} />
             </div>
-            <Para><b style={{ color: GOLD }}>Move around.</b> Drag the background to pan, pinch to zoom, drag a node to pull the web apart. The <Crosshair size={13} style={{ verticalAlign: '-2px' }} /> button refits everything to screen.</Para>
+            <Para><b style={{ color: GOLD }}>It maps the money and companies around UK politics.</b> Every dot is a person, company or party; every line is a connection drawn from a public register. Every link cites its source.</Para>
+            <Para><b style={{ color: GOLD }}>What you can find.</b> Which MPs hold business interests that overlap the laws they are shaping; who funds each party, and the people behind those companies; and the path connecting any two figures.</Para>
+            <div onClick={() => { setShowInfo(false); setSearchOpen(true); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '14px 16px', margin: '6px 0 18px', borderRadius: 12, background: GOLD, color: '#1A1206', cursor: 'pointer', fontWeight: 800, fontSize: 15.5 }}>
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <span>Show me the leads →</span>
+                <span style={{ fontSize: 11.5, fontWeight: 600, opacity: 0.82 }}>connections ranked by what merits a look — start at the top</span>
+              </span>
+              <Search size={18} style={{ flex: '0 0 auto' }} />
+            </div>
+            <Para><b style={{ color: GOLD }}>Move around.</b> Drag the background to pan, pinch to zoom, drag a node to pull the web apart. A <span style={{ color: VERM, fontWeight: 700 }}>red ring</span> flags an entity that merits a look. The <Crosshair size={13} style={{ verticalAlign: '-2px' }} /> button refits everything to screen.</Para>
             <Para><b style={{ color: GOLD }}>Tap a node.</b> A panel slides up with who funds it, who sits where, and what’s been written. Tap the handle to expand it; tap the background to dismiss.</Para>
             <Para><b style={{ color: GOLD }}>Confidence.</b> A fuzzy name match is weaker than a Companies House ID. Solid lines are confirmed; dotted are suspected. The dial up top hides anything below your threshold.</Para>
             <Para><b style={{ color: GOLD }}>Trails.</b> Trace a path between two figures to see exactly how they’re joined, step by step. Raise the dial and a weak link can break the chain; lower it and a hidden one completes it.</Para>
             <Para><b style={{ color: GOLD }}>The line we hold.</b> ORRERY surfaces public-record connections and lets you draw your own conclusion. It never alleges wrongdoing — a connection is a fact with a source attached.</Para>
             <div style={{ padding: '11px 13px', borderRadius: 10, background: 'rgba(229,101,75,0.08)', border: '1px solid rgba(229,101,75,0.25)', fontSize: 12.5, color: '#F0A593', display: 'flex', gap: 9 }}>
-              <AlertTriangle size={15} style={{ flex: '0 0 auto', marginTop: 1 }} />Drawn from public Companies House records (officers and persons with significant control). A connection is a sourced public-record fact — not a judgement or any allegation of wrongdoing.
+              <AlertTriangle size={15} style={{ flex: '0 0 auto', marginTop: 1 }} />Drawn from public records — Companies House, the Electoral Commission and the UK Parliament. A connection is a sourced public-record fact, not a judgement or any allegation of wrongdoing.
             </div>
           </div>
         </div>
