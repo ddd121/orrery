@@ -12,6 +12,8 @@ export type GraphNode = {
   scrutinyMoney?: string;
   conflict?: boolean;
   conflictReason?: string;
+  conflictStrength?: string;
+  conflictOverlap?: string;
 };
 export type GraphLink = {
   source: string;
@@ -98,6 +100,8 @@ export async function loadGraph(): Promise<{
       scrutinyMoney: attrs.scrutiny_money_gbp != null ? gbp(attrs.scrutiny_money_gbp) : undefined,
       conflict: attrs.conflict_flag === true,
       conflictReason: attrs.conflict_reason ?? undefined,
+      conflictStrength: attrs.conflict_strength ?? undefined,
+      conflictOverlap: attrs.conflict_overlap ?? undefined,
     };
   });
 

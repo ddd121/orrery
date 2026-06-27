@@ -36,7 +36,7 @@ BUILD = [
     HERE / "resolution" / "resolve_v3.sql",
     HERE / "graph" / "edges_v2.sql",
     HERE / "graph" / "scrutiny_v1.sql",
-    HERE / "graph" / "motifs_v1.sql",
+    HERE / "graph" / "motifs_v2.sql",
 ]
 
 # Clear the resolved layer (so the raw can be deleted past its FKs) + drop the Parliament raw

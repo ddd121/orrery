@@ -350,9 +350,11 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
   };
   /* entities ranked by what merits a look: conflicts first, then scrutiny, then connectedness */
   const ranked = useMemo(() => {
+    const sr = { strong: 0, medium: 1, low: 2 };
+    const crank = (n) => (n.conflict ? (sr[n.conflictStrength] ?? 1) : 3);
     const l = [...nodes];
     l.sort((a, b) =>
-      (Number(!!b.conflict) - Number(!!a.conflict)) ||
+      (crank(a) - crank(b)) ||
       ((b.scrutiny || 0) - (a.scrutiny || 0)) ||
       (b.importance - a.importance) ||
       a.name.localeCompare(b.name));
@@ -459,7 +461,7 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
                     <circle r={r * 2.3} fill={c} opacity={isSel || inTrace ? 0.3 : 0.12} style={n.importance >= 8 ? { animation: 'tw 4s ease-in-out infinite' } : undefined} />
                     {(isSel || inTrace) && <circle r={r + 6} fill="none" stroke={inTrace ? GOLD : c} strokeOpacity="0.9" strokeWidth="1.8" />}
                     {n.scrutiny >= 0.7 && <circle r={r + 9} fill="none" stroke={VERM} strokeOpacity="0.85" strokeWidth="1.6" strokeDasharray="2 3" />}
-                    {n.conflict && <circle r={r + 12} fill="none" stroke={VERM} strokeOpacity="0.95" strokeWidth="2.4" />}
+                    {n.conflict && <circle r={r + 12} fill="none" stroke={VERM} strokeOpacity={n.conflictStrength === 'low' ? 0.4 : n.conflictStrength === 'strong' ? 1 : 0.8} strokeWidth={n.conflictStrength === 'strong' ? 3 : 2} />}
                     <circle r={r} fill={c} stroke="rgba(255,255,255,0.7)" strokeWidth={isSel ? 2 : 1} />
                     <circle r={r * 0.42} cx={-r * 0.22} cy={-r * 0.22} fill="#fff" opacity="0.22" />
                     {showLabel && (
@@ -504,7 +506,7 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
                     <span style={{ display: 'block', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.name}</span>
                     <span style={{ display: 'block', fontSize: 10.5, color: MUTE, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.role}</span>
                   </span>
-                  {n.conflict ? <AlertTriangle size={13} color={VERM} style={{ flex: '0 0 auto' }} />
+                  {n.conflict ? <AlertTriangle size={13} color={VERM} style={{ flex: '0 0 auto', opacity: n.conflictStrength === 'low' ? 0.4 : 1 }} />
                     : n.scrutiny >= 0.7 ? <span style={{ width: 7, height: 7, borderRadius: '50%', background: VERM, opacity: 0.75, flex: '0 0 auto' }} /> : null}
                 </div>
               ))}
@@ -597,15 +599,22 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
 
             {/* scrollable detail */}
             <div className="sc" style={{ flex: 1, overflowY: 'auto', padding: '4px 18px 28px' }}>
-              {selNode.conflict && (
-                <div style={{ display: 'flex', gap: 9, padding: '12px 13px', marginBottom: 16, borderRadius: 11, background: 'rgba(229,101,75,0.12)', border: '1px solid rgba(229,101,75,0.5)' }}>
-                  <AlertTriangle size={16} color={VERM} style={{ flex: '0 0 auto', marginTop: 1 }} />
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#F0A593', letterSpacing: '.12em', textTransform: 'uppercase' }}>Conflict-shaped · merits a look</div>
-                    <div style={{ fontSize: 13, color: '#E8C7BC', lineHeight: 1.5, marginTop: 5 }}>{selNode.conflictReason}</div>
+              {selNode.conflict && (() => {
+                const low = selNode.conflictStrength === 'low';
+                const strong = selNode.conflictStrength === 'strong';
+                const acc = low ? '#9AA0AD' : VERM;
+                const head = strong ? `Strong signal · ${selNode.conflictOverlap} overlap`
+                  : low ? 'Flagged · lower priority' : 'Worth a look';
+                return (
+                  <div style={{ display: 'flex', gap: 9, padding: '12px 13px', marginBottom: 16, borderRadius: 11, background: low ? 'rgba(154,160,173,0.10)' : 'rgba(229,101,75,0.12)', border: `1px solid ${low ? 'rgba(154,160,173,0.40)' : 'rgba(229,101,75,0.5)'}` }}>
+                    <AlertTriangle size={16} color={acc} style={{ flex: '0 0 auto', marginTop: 1 }} />
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: low ? '#AEB4C0' : '#F0A593', letterSpacing: '.12em', textTransform: 'uppercase' }}>Conflict-shaped · {head}</div>
+                      <div style={{ fontSize: 13, color: low ? '#C7CBD3' : '#E8C7BC', lineHeight: 1.5, marginTop: 5 }}>{selNode.conflictReason}</div>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
               {/* trace from here (full width) */}
               <button onClick={startTrace} style={{ width: '100%', height: 42, borderRadius: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 18,
                 background: 'rgba(232,182,90,0.12)', border: `1px solid rgba(232,182,90,0.4)`, color: GOLD, fontSize: 14, fontWeight: 600 }}>
