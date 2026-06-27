@@ -113,7 +113,14 @@ npx --yes cloudflared tunnel --url http://localhost:3000  # temporary public lin
 
 ## Roadmap (remaining — do in order)
 
-1. **Calibration — MACHINERY DONE** (`resolution/calibration.py`: pure-Python isotonic
+1. **Resolution moat — §4.4 graph-aware dedup DONE** (`resolution/dedupe_v1.sql`, runs in
+   `recompute build` between resolve_v3 and edges_v2): deterministic, precision-safe merge of
+   split canonical entities — same sorted-name key + a *shared specific neighbour* (party /
+   government_body hubs excluded) or DOB-year. Collapsed 17/23 split persons (859→829 entities;
+   "COWLING, Tom" → one entity, chain intact); 6 same-name clusters correctly LEFT unmerged
+   (distinct donor ids, no shared link — handed to the calibrated matcher). This is the safe
+   deterministic layer; the harder cross-source/ambiguous-band cases still need calibration:
+   **Calibration MACHINERY DONE** (`resolution/calibration.py`: pure-Python isotonic
    (PAVA) + reliability diagram + threshold-to-target-precision; self-tested — e.g. ≥95%
    precision at score ≥ 0.90 on the synthetic set). **Remaining: fit it to a REAL gold set**,
    which needs broader data (item 2) — the current slice has too few cross-source candidate
