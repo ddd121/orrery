@@ -68,11 +68,12 @@ npx --yes cloudflared tunnel --url http://localhost:3000  # temporary public lin
   EC top-40 donations of 2024; **150 current MPs** (+ biographies) and their registered interests.
 - **Money ↔ power connects:** Labour = 15 corporate donors / £13.8M / 12 MP members.
   Ecotricity → £1M → Labour + its 14 directors (incl. Dale Vince). Phoenix → £5M → Conservatives.
-- **§7 conflict-of-interest (`motifs_v2.sql`, salience-ranked): 21 MPs flagged — 5 strong / 12 medium / 4 low.**
-  STRONG remit↔sector overlap: Amos (housing), Brash (housing), Alaba (media), Aquarone (data/tech),
-  Barclay (finance). The 12 medium are commercial interests whose sector isn't in the company name —
-  the SIC-code / interest-description sector step would promote the genuine ones. Per-edge provenance
-  (`attributes.sources`) labels every link by its real register. Rebuild: `recompute build`.
+- **§7 conflict-of-interest (`motifs_v2.sql`, salience-ranked): 21 MPs — 6 strong / 11 medium / 4 low.**
+  Sector is inferred from the company's declared **description + nature** (Register of Interests), not
+  just its name, and **internal House-management committees** (Finance Committee (Commons), Members
+  Estimate, …) are excluded so their names don't fake a sector overlap. STRONG: Amos (housing), Brash
+  (housing), Alaba (media), Aquarone (data/tech), Collins (data/tech), Barclay (finance). Per-edge
+  provenance (`attributes.sources`) labels every link by its real register. Rebuild: `recompute build`.
 - Fuzzy matcher: **0 cross-source person matches** in this slice (nothing inferred goes
   public); catches within-source dedup (two-id Kennerley; CH officer-vs-PSC name variants).
 
