@@ -19,9 +19,12 @@ with lex(theme, kw) as (values
   ('media','festival'),('media','culture'),('media','sport'),('media','entertain'),
   ('transport','transport'),('transport','rail'),('transport','aviation'),('transport','logistic'),('transport','freight'),
   ('energy','energy'),('energy','power'),('energy','renewable'),('energy','solar'),('energy','petroleum'),
-  ('education','education'),('education','school'),('education','academ'),('education','universit'),('education','training'),
+  ('education','education'),('education','school'),('education','academ'),('education','universit'),
   ('legal','litigation'),('legal','solicitor'),('legal','barrister'),('legal','chambers'),
-  ('procurement','procurement'),('procurement','supply chain')
+  ('procurement','procurement'),('procurement','supply chain'),
+  ('housing','architect'),('housing','planner'),('housing','real estate'),
+  ('health','optic'),('health','ophthalm'),('health','optom'),
+  ('media','communicat'),('media','public relations'),('finance','payment')
 ),
 mp as (
   select id, regexp_replace(lower(canonical_name), '^.* ', '') as surname
@@ -33,12 +36,26 @@ comm as (  -- committees / bills / ministerial bodies the MP sits on
   join public.statements s on s.subject_entity_id = m.id and s.statement_type in ('MEMBER_OF', 'CHAIR_OF', 'MINISTERIAL_ROLE')
   join public.canonical_entities o on o.id = s.object_entity_id
   where o.entity_type in ('organisation', 'government_body')
+    -- drop internal House-management bodies: their names ("Finance Committee", "Members Estimate")
+    -- match sector keywords but they run Parliament, they are not a policy remit over a sector
+    and lower(o.canonical_name) !~ '(commons commission|finance and services|finance committee|members estimate|administration estimate|audit and risk|standards|privileges|procedure committee|panel of chairs|committee of selection|backbench|liaison committee|restoration and renewal)'
 ),
-intr as (  -- directorships / shareholdings (active business interests)
-  select m.id as mp_id, m.surname, o.canonical_name as iname, lower(o.canonical_name) as itxt
+codesc as (  -- declared description + nature for a company, from its interest mentions
+  select mr.canonical_entity_id as cid,
+         lower(string_agg(distinct nullif(trim(coalesce(men.raw_attributes->>'description', '') || ' '
+                || coalesce(men.raw_attributes->>'nature', '')), ''), ' ')) as descr
+  from public.mention_resolutions mr
+  join public.mentions men on men.id = mr.mention_id
+  where mr.is_active
+  group by mr.canonical_entity_id
+),
+intr as (  -- directorships and shareholdings, with company name plus declared description as itxt
+  select m.id as mp_id, m.surname, o.canonical_name as iname,
+         lower(o.canonical_name) || ' ' || coalesce(cd.descr, '') as itxt
   from mp m
   join public.statements s on s.subject_entity_id = m.id and s.statement_type in ('OWNS', 'DIRECTOR_OF')
   join public.canonical_entities o on o.id = s.object_entity_id
+  left join codesc cd on cd.cid = o.id
 ),
 comm_theme as (select distinct c.mp_id, l.theme from comm c join lex l on c.txt like '%' || l.kw || '%'),
 intr_theme as (select distinct i.mp_id, l.theme from intr i join lex l on i.itxt like '%' || l.kw || '%'),
@@ -52,7 +69,7 @@ agg as (
     string_agg(distinct i.iname, '; ' order by i.iname) as interests,
     -- a "real" commercial interest = not a party-political vehicle, not dormant, not the MP's own-name company
     bool_or(
-      i.itxt !~ '(labour|conservative|liberal democrat|reform uk| party|campaign|to win)'
+      i.itxt !~ '(labour|conservative|liberal democrat|reform uk|political organisation|political campaign|campaign support|deliver campaigns|support my work as an mp| party| to win)'
       and i.itxt not like '%dormant%'
       and i.itxt not like '%' || i.surname || '%'
     ) as has_commercial

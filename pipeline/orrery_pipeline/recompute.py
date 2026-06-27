@@ -54,10 +54,16 @@ delete from public.source_documents where source_code in ('parliament', 'parliam
 
 def split_statements(sql: str) -> list[str]:
     """Split a SQL script into statements, ignoring ';' inside single-quoted literals and
-    dropping line comments. Sufficient for our INSERT/UPDATE/TRUNCATE files (no dollar-quotes)."""
-    body = "\n".join(l for l in sql.splitlines() if not l.lstrip().startswith("--"))
+    stripping -- comments (full-line AND inline) so a stray apostrophe or ';' in a comment
+    can't break the parse. Sufficient for our INSERT/UPDATE/TRUNCATE files (no dollar-quotes)."""
     out, buf, in_str = [], [], False
-    for ch in body:
+    i, n = 0, len(sql)
+    while i < n:
+        ch = sql[i]
+        if not in_str and ch == "-" and i + 1 < n and sql[i + 1] == "-":
+            while i < n and sql[i] != "\n":  # skip the comment to end of line
+                i += 1
+            continue
         if ch == "'":
             in_str = not in_str
         if ch == ";" and not in_str:
@@ -65,8 +71,10 @@ def split_statements(sql: str) -> list[str]:
             if stmt:
                 out.append(stmt)
             buf = []
-        else:
-            buf.append(ch)
+            i += 1
+            continue
+        buf.append(ch)
+        i += 1
     tail = "".join(buf).strip()
     if tail:
         out.append(tail)
