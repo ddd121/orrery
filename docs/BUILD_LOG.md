@@ -169,7 +169,13 @@ npx --yes cloudflared tunnel --url http://localhost:3000  # temporary public lin
 4. **Scheduled refresh** (the 3 sources) + later CH streaming → motif-closing alerts (§8 anomaly).
 5. **Human-verified flywheel:** analyst confirm/reject on ambiguous merges → training data.
 6. **On-demand LLM summaries** of a path/flag → sourced neutral plain English.
-7. **Real graph lib** (react-force-graph / Sigma) — **now the priority** at 839 nodes (the
+7. **Real graph lib — DONE (react-force-graph-2d, canvas)** (`web/app/components/OrreryCanvas.jsx`):
+   Explore renders the full **2,074-node** graph smoothly on canvas; verified search-focus (camera
+   flies + dims others), node-select → inspector, confidence slider, and the panel all preserved;
+   the SVG's per-tick re-render (the CPU/fan sink) is gone (the library owns the sim/zoom/pan).
+   `OrreryGraph.jsx` slimmed ~355 lines to wire the existing chrome into the canvas. Home/Dossier/
+   Connect untouched (small graphs). Earlier context for why this was the priority:
+   ~~Real graph lib (react-force-graph / Sigma) — was the priority at 839 nodes (the
    hairball + the SVG's limit). Interim wins shipped: (a) **perf** — the d3 sim is pre-warmed
    headlessly with no continuous 60fps timer (was re-rendering ~5k SVG els ~300× on load → the
    "fan"; now idles when still; drag ticks on-move) in `OrreryGraph.jsx`; (b) **onboarding** — a
