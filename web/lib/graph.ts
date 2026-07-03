@@ -32,6 +32,7 @@ const SOURCE_LABEL: Record<string, string> = {
   electoral_commission: "Electoral Commission",
   parliament: "Parliament (Members API)",
   parliament_interests: "Register of Members' Interests",
+  lords_interests: "Register of Lords' Interests",
   contracts_finder: "Contracts Finder",
 };
 
