@@ -7,12 +7,19 @@
 
 Milestones **1–7 done + a findings-first UX rebuild**; now on a **launch-readiness push**
 (calibration → depth → polish → international; hosting/auth excluded per Roy — "v last").
-A **5-register** UK power-map (Companies House · Electoral Commission · Parliament members ·
-Register of Members' Interests · **Contracts Finder**) is **live** at `localhost:3000`, pushed to
-`github.com/ddd121/orrery` (`main`). **2,074 entities / ~5,800 statements / 95 conflict leads
-(24 strong)**. The app is findings-first (Home board · Dossier · A→B Connect · canvas Explore at
-2,074 nodes via react-force-graph). Resolution moat: deterministic resolve + **§4.4 graph-aware
-dedup done**.
+A **6-register** UK power-map (Companies House · Electoral Commission · Parliament members ·
+Register of Members' Interests · **Contracts Finder** · **Register of Lords' Interests**) is
+**live** at `localhost:3000`, pushed to `github.com/ddd121/orrery` (`main`). **5,903 entities /
+9,796 statements** (Lords added 3,346 declared ties from 791 peers; the CH bridge attached 37
+interest-declared companies to their real Companies House records). The app is findings-first
+(Home board · Dossier · A→B Connect · canvas Explore via react-force-graph). Resolution moat:
+deterministic resolve + **§4.4 graph-aware dedup done**. Real cross-register loops now close —
+**Ecotricity** (interest register → CH directors → Labour donation → 21 public contracts, one
+canonical entity); **IPGL** (Lord Spencer's Lords declaration + his CH officer record + 33
+co-directors + Patrick Spencer MP); **GB News** ties five parliamentarians. The **CH bridge**
+(`ingestion/companies_from_interests.py`) is deterministic: exact normalised-name match to a single
+ACTIVE company, with a **suffix-class guard** (a foreign "Inc" never folds into a UK "Ltd"; "plc"
+never into "Limited") — this is what keeps a US-parent declaration off a coincidental UK namesake.
 
 **Calibration moat — validated & correctly report-only (2026-07-03).** The cross-source person
 matcher stays **report-only with 0 auto-merges — the right state, proven, not a shortfall.** The
