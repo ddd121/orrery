@@ -282,7 +282,10 @@ def build_sql(awards: list[dict], source_url: str):
         "relationship_assertions":
             "id, source_document_id, statement_type, from_mention_id, to_mention_id, valid_from, valid_to, raw_attributes",
     }
-    parts = []
+    # Idempotent re-ingest: drop any prior contracts load first (FK cascade removes its mentions
+    # + assertions + resolutions) so re-running over a larger company set never duplicates rows or
+    # collides on the fixed (source_code, external_ref) unique key.
+    parts = ["delete from public.source_documents where source_code = 'contracts_finder';"]
     for table in ("source_documents", "mentions", "relationship_assertions"):
         if rows[table]:
             parts.append(
