@@ -1,12 +1,12 @@
 :root {
-  --gold: #e8b65a;
-  --text: #e8ecf6;
-  --muted: #8a93ad;
-  --bg: #0b1020;
+  --font-display: Georgia, "Times New Roman", serif;
+  --font-sans: "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, Consolas, monospace;
 }
 
 * {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html,
@@ -16,13 +16,49 @@ body {
 }
 
 body {
-  background: radial-gradient(
-    900px 640px at 50% -10%,
-    #131b34 0%,
-    #0b1020 54%,
-    #070a16 100%
-  );
-  color: var(--text);
-  font-family: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+  /* flat near-black register ground; the radial "dark mesh" gradient is retired */
+  background: #0a0e16;
+  color: #edf1fa;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.6;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgba(217, 166, 72, 0.3);
+}
+
+/* visible keyboard focus everywhere (the brass accent) */
+:focus-visible {
+  outline: 2px solid #d9a648;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* thin, quiet scrollbars */
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(154, 167, 199, 0.25);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* motion is a persuasion device; this product is disinterested. Honour reduced motion fully. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
