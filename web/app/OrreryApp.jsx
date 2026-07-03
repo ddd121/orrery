@@ -51,19 +51,70 @@ export default function OrreryApp({ nodes, links, types }) {
     return m;
   }, [nodes]);
 
+  /* Reflect the current finding in the URL hash so a dossier / path / node can be shared and
+     restored. replaceState keeps history clean and does NOT fire hashchange, so writing here
+     never loops back into navigation. */
+  const setHash = (h) => {
+    if (typeof window === 'undefined') return;
+    const url = h ? `#${h}` : window.location.pathname + window.location.search;
+    window.history.replaceState(null, '', url);
+  };
+  // Deep-links key on the entity NAME, not its canonical id: ids are regenerated on every
+  // pipeline recompute, so a name-based link stays valid across rebuilds (and reads cleanly
+  // when shared, e.g. #entity=Ecotricity Group Limited).
+  const nameOf = (id) => (id && nodeById[id] ? nodeById[id].name : null);
+  const nodeByName = (name) => nodes.find((n) => n.name === name) || null;
+
   const openEntity = (id) => {
     if (!nodeById[id]) return;
     setEntityId(id);
     setView('entity');
+    setHash(`entity=${encodeURIComponent(nodeById[id].name)}`);
     if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
   };
-  const openHome = () => { setView('home'); setEntityId(null); };
-  const openExplore = (focusId) => { setExploreFocus(focusId || null); setView('explore'); };
+  const openHome = () => { setView('home'); setEntityId(null); setHash(''); };
+  const openExplore = (focusId) => {
+    setExploreFocus(focusId || null);
+    setView('explore');
+    const nm = nameOf(focusId);
+    setHash(nm ? `explore=${encodeURIComponent(nm)}` : 'explore');
+  };
   const goConnect = (initialFromId) => {
-    setConnectFrom(initialFromId && nodeById[initialFromId] ? initialFromId : null);
+    const from = initialFromId && nodeById[initialFromId] ? initialFromId : null;
+    setConnectFrom(from);
     setView('connect');
+    const nm = nameOf(from);
+    setHash(nm ? `connect=${encodeURIComponent(nm)}` : 'connect');
     if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
   };
+
+  /* Deep-link restore: on first load (and back/forward), open whatever the hash names — matched
+     by entity name so a shared link survives pipeline recomputes. */
+  useEffect(() => {
+    const applyHash = () => {
+      const h = window.location.hash.replace(/^#/, '');
+      const eq = h.indexOf('=');
+      const k = eq === -1 ? h : h.slice(0, eq);
+      const v = eq === -1 ? null : decodeURIComponent(h.slice(eq + 1));
+      if (k === 'entity' && v) {
+        const n = nodeByName(v);
+        if (n) { setEntityId(n.id); setView('entity'); return; }
+        setView('home'); setEntityId(null);
+      } else if (k === 'connect') {
+        const n = v ? nodeByName(v) : null;
+        setConnectFrom(n ? n.id : null); setView('connect');
+      } else if (k === 'explore') {
+        const n = v ? nodeByName(v) : null;
+        setExploreFocus(n ? n.id : null); setView('explore');
+      } else {
+        setView('home'); setEntityId(null);
+      }
+    };
+    applyHash();
+    window.addEventListener('hashchange', applyHash);
+    return () => window.removeEventListener('hashchange', applyHash);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodes]);
 
   /* ---- Explore is the full-screen original graph; render it bare (it owns the
      viewport, header and all) so we don't double up chrome. ---- */

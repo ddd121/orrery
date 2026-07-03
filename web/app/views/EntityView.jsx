@@ -12,8 +12,8 @@
  * Reuses the inspector connection-row look from the original graph, and the same
  * conflict-box styling (vermillion; low-priority greyed). Facts, not verdicts.
  */
-import React, { useMemo } from 'react';
-import { ArrowLeft, AlertTriangle, Info, Compass, GitCompareArrows } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { ArrowLeft, AlertTriangle, Info, Compass, GitCompareArrows, Link2, Check } from 'lucide-react';
 import {
   GOLD, VERM, TEXT, MUTE, HAIR, MONO,
   typeColor, typeIcon, typeLabel, confColor, tiesOf, idOf,
@@ -159,6 +159,7 @@ export default function EntityView({ entityId, nodes, links, types, onOpenEntity
               >
                 <GitCompareArrows size={16} /> Find a path from here
               </button>
+              <ShareButton />
             </div>
           </div>
         </aside>
@@ -234,6 +235,30 @@ function BackBtn({ onBack }) {
       style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 11px', borderRadius: 9, background: 'rgba(255,255,255,0.05)', border: `1px solid ${HAIR}`, color: MUTE, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
     >
       <ArrowLeft size={15} /> Findings
+    </button>
+  );
+}
+
+/* Copy a shareable deep-link to this dossier (the URL now carries #entity=<id>). */
+function ShareButton() {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      /* clipboard unavailable (insecure context) — leave the state unchanged */
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title="Copy a shareable link to this dossier"
+      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, height: 44, borderRadius: 11, background: copied ? 'rgba(124,197,142,0.12)' : 'rgba(255,255,255,0.04)', border: `1px solid ${copied ? 'rgba(124,197,142,0.5)' : HAIR}`, color: copied ? '#7CC58E' : MUTE, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+    >
+      {copied ? <><Check size={16} /> Link copied</> : <><Link2 size={16} /> Copy link to this finding</>}
     </button>
   );
 }
