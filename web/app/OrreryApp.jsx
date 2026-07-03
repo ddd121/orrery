@@ -13,7 +13,7 @@
  * is code-split so it never weighs down the landing.
  */
 import React, { useMemo, useState, useRef, useEffect, lazy, Suspense } from 'react';
-import { Search, X, Compass, ArrowLeft, BookOpen, GitCompareArrows } from 'lucide-react';
+import { MagnifyingGlass, X, Graph, ArrowLeft, BookOpenText, Path } from '@phosphor-icons/react';
 import {
   GOLD, VERM, TEXT, MUTE, HAIR, PANEL, MONO, SANS, BG,
   typeColor,
@@ -247,7 +247,7 @@ function Header({ ranked, types, onPick, onHome, onExplore, onConnect }) {
       {/* global search — suggests entities, jumps to the dossier on select */}
       <div ref={boxRef} style={{ position: 'relative', flex: 1, maxWidth: 460, marginLeft: 'auto' }}>
         <div style={{ position: 'relative' }}>
-          <Search size={15} color={MUTE} style={{ position: 'absolute', left: 11, top: 10 }} />
+          <MagnifyingGlass size={15} color={MUTE} style={{ position: 'absolute', left: 11, top: 10 }} />
           <input
             value={q}
             onChange={(e) => { setQ(e.target.value); setOpen(true); }}
@@ -304,7 +304,7 @@ function Header({ ranked, types, onPick, onHome, onExplore, onConnect }) {
           background: 'rgba(255,255,255,0.05)', border: `1px solid ${HAIR}`, color: MUTE, cursor: 'pointer', fontSize: 13, fontWeight: 600, flex: '0 0 auto',
         }}
       >
-        <GitCompareArrows size={16} /> <span className="hide-sm">Connect</span>
+        <Path size={16} /> <span className="hide-sm">Connect</span>
       </button>
       <button
         onClick={onExplore}
@@ -314,7 +314,7 @@ function Header({ ranked, types, onPick, onHome, onExplore, onConnect }) {
           background: 'rgba(255,255,255,0.05)', border: `1px solid ${HAIR}`, color: MUTE, cursor: 'pointer', fontSize: 13, fontWeight: 600, flex: '0 0 auto',
         }}
       >
-        <Compass size={16} /> <span className="hide-sm">Explore</span>
+        <Graph size={16} /> <span className="hide-sm">Explore</span>
       </button>
       <button
         onClick={() => setShowHelp(true)}
@@ -325,7 +325,7 @@ function Header({ ranked, types, onPick, onHome, onExplore, onConnect }) {
           background: 'rgba(255,255,255,0.05)', border: `1px solid ${HAIR}`, color: MUTE, cursor: 'pointer',
         }}
       >
-        <BookOpen size={16} />
+        <BookOpenText size={16} />
       </button>
 
       {showHelp && <HelpSheet onClose={() => setShowHelp(false)} />}

@@ -15,9 +15,9 @@
  * than imply the two are unconnected.
  */
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { Search, X, ArrowLeft, ArrowRight, GitCompareArrows, RotateCcw, Info, Frown } from 'lucide-react';
+import { MagnifyingGlass, X, ArrowLeft, ArrowRight, Path, ArrowCounterClockwise, Info, SmileySad } from '@phosphor-icons/react';
 import {
-  GOLD, VERM, TEXT, MUTE, HAIR, PANEL, MONO,
+  GOLD, VERM, TEXT, MUTE, HAIR, PANEL, MONO, POSITIVE, SIGNAL, BRASS, TYPO, RADIUS,
   typeColor, typeIcon, confColor, findPath, idOf,
 } from '@/lib/graph-utils';
 import ForceGraph from '../components/ForceGraph';
@@ -123,7 +123,7 @@ export default function ConnectView({ nodes, links, types, onOpenEntity, onBack,
       <div style={{ marginTop: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ width: 38, height: 38, borderRadius: 11, display: 'grid', placeItems: 'center', flex: '0 0 auto', background: 'rgba(232,182,90,0.12)', border: `1px solid rgba(232,182,90,0.4)` }}>
-            <GitCompareArrows size={20} color={GOLD} />
+            <Path size={20} color={GOLD} />
           </span>
           <div>
             <h1 style={{ fontSize: 'clamp(20px, 4vw, 26px)', fontWeight: 800, margin: 0, lineHeight: 1.18 }}>How are they connected?</h1>
@@ -176,7 +176,7 @@ export default function ConnectView({ nodes, links, types, onOpenEntity, onBack,
           title="Reset"
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.04)', border: `1px solid ${HAIR}`, color: MUTE, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
         >
-          <RotateCcw size={13} /> Reset
+          <ArrowCounterClockwise size={13} /> Reset
         </button>
       </div>
 
@@ -244,7 +244,7 @@ function Picker({ label, accent, ranked, types, picked, onPick, onClear }) {
         <EntityChip node={picked} types={types} accent={accent} onClear={onClear} />
       ) : (
         <div ref={boxRef} style={{ position: 'relative' }}>
-          <Search size={15} color={MUTE} style={{ position: 'absolute', left: 12, top: 13 }} />
+          <MagnifyingGlass size={15} color={MUTE} style={{ position: 'absolute', left: 12, top: 13 }} />
           <input
             value={q}
             onChange={(e) => { setQ(e.target.value); setOpen(true); }}
@@ -333,7 +333,7 @@ function NoPath({ thresh, from, to, onLower }) {
   return (
     <div style={{ padding: '22px 18px', borderRadius: 14, background: 'rgba(229,101,75,0.06)', border: '1px solid rgba(229,101,75,0.3)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 8 }}>
-        <Frown size={18} color={VERM} />
+        <SmileySad size={18} color={VERM} />
         <span style={{ fontSize: 15.5, fontWeight: 700 }}>
           {atZero ? 'Not connected in the current data' : `No connection found at ${thresh}% confidence`}
         </span>
@@ -350,7 +350,7 @@ function NoPath({ thresh, from, to, onLower }) {
           onClick={onLower}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 10, background: 'rgba(232,182,90,0.14)', border: `1px solid rgba(232,182,90,0.45)`, color: GOLD, fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }}
         >
-          <RotateCcw size={15} /> Include weaker links (search at 0%)
+          <ArrowCounterClockwise size={15} /> Include weaker links (search at 0%)
         </button>
       )}
     </div>
@@ -452,19 +452,19 @@ function NodePill({ node, types, onOpen }) {
   );
 }
 
-/* a compact key to the per-hop confidence colours (mirrors confColor's bands). */
+/* a compact key to the per-hop confidence tiers (mirrors confTier's bands). */
 function ConfidenceLegend() {
   const items = [
-    { c: '#7CC58E', label: 'Established ≥80%', hint: 'matched on an official identifier' },
-    { c: GOLD, label: 'Probable 50–79%' },
-    { c: VERM, label: 'Lead <50%', hint: 'weaker — treat as a pointer' },
+    { c: POSITIVE, label: 'Established, 80% and above', hint: 'matched on an official identifier' },
+    { c: BRASS, label: 'Probable, 50 to 79%' },
+    { c: SIGNAL, label: 'Lead, below 50%', hint: 'weaker: treat as a pointer, not a fact' },
   ];
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 18, padding: '8px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.025)', border: `1px solid ${HAIR}` }}>
-      <span style={{ fontFamily: MONO, fontSize: 9.5, letterSpacing: '.12em', textTransform: 'uppercase', color: MUTE }}>Confidence</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 18, padding: '8px 12px', borderRadius: RADIUS.sm, background: 'rgba(255,255,255,0.025)', border: `1px solid ${HAIR}` }}>
+      <span style={{ ...TYPO.dataLabel }}>Confidence</span>
       {items.map((it) => (
-        <span key={it.label} title={it.hint || ''} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: MONO, fontSize: 11, color: '#B9C2D8' }}>
-          <span style={{ width: 9, height: 9, borderRadius: '50%', background: it.c, flex: '0 0 auto' }} />
+        <span key={it.label} title={it.hint || ''} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, ...TYPO.dataValue, color: TEXT }}>
+          <span style={{ width: 9, height: 9, borderRadius: RADIUS.xs, background: it.c, flex: '0 0 auto' }} />
           {it.label}
         </span>
       ))}

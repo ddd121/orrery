@@ -15,7 +15,7 @@
  */
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import dynamic from 'next/dynamic';
-import { Search, X, Share2, Newspaper, AlertTriangle, Info, Crosshair, Landmark, User, Building2, Flag, Users, Briefcase, ChevronUp, ChevronDown, Filter } from 'lucide-react';
+import { MagnifyingGlass, X, ShareNetwork, Newspaper, WarningDiamond, Info, Crosshair, Bank, User, Buildings, FlagBanner, UsersThree, Megaphone, CaretUp, CaretDown, FunnelSimple } from '@phosphor-icons/react';
 import { findPath, idOf, radius, confColor as confColorShared, typeColor, typeIcon } from '@/lib/graph-utils';
 
 /* OrreryCanvas touches `window` (canvas + d3-force), so it's client-only. */
@@ -32,8 +32,9 @@ const MONO = 'ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monosp
 const SANS = '"Helvetica Neue", Helvetica, Arial, system-ui, sans-serif';
 
 const TAG = { Scrutiny: VERM, Funding: GOLD, Contract: '#6FC3B8', Donation: '#E08AAE', Mention: MUTE, Appointment: '#9C8BD8' };
-/* entity-type icons resolved by name (entity_types.ui_icon from the database) */
-const ICONS = { Landmark, User, Building2, Flag, Users, Briefcase };
+/* entity-type icons resolved by name (entity_types.ui_icon from the database).
+   Keys are the DB's ui_icon strings (unchanged); values point at Phosphor. */
+const ICONS = { Landmark: Bank, User, Building2: Buildings, Flag: FlagBanner, Users: UsersThree, Briefcase: Megaphone };
 
 /* ------------------------------ helpers ------------------------------ */
 const pairKey = (a, b) => (a < b ? a + '|' + b : b + '|' + a);
@@ -239,8 +240,8 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
           <div style={{ fontWeight: 800, letterSpacing: '.15em', fontSize: 15 }}>ORRERY</div>
           <div className="eb" style={{ marginTop: 2 }}>influence, mapped</div>
         </div>
-        <IconBtn onClick={() => setSearchOpen((s) => !s)} active={searchOpen}><Search size={18} /></IconBtn>
-        <IconBtn onClick={() => setFiltersOpen((s) => !s)} active={filtersOpen}><Filter size={18} /></IconBtn>
+        <IconBtn onClick={() => setSearchOpen((s) => !s)} active={searchOpen}><MagnifyingGlass size={18} /></IconBtn>
+        <IconBtn onClick={() => setFiltersOpen((s) => !s)} active={filtersOpen}><FunnelSimple size={18} /></IconBtn>
         <IconBtn onClick={() => setShowInfo(true)}><Info size={18} /></IconBtn>
       </div>
 
@@ -277,7 +278,7 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
           <div className="in" style={{ position: 'absolute', top: 12, left: 12, bottom: 12, width: 296, zIndex: 30, display: 'flex', flexDirection: 'column', borderRadius: 14, background: PANEL, border: `1px solid ${HAIR}`, backdropFilter: 'blur(13px)', WebkitBackdropFilter: 'blur(13px)', overflow: 'hidden', boxShadow: '0 18px 55px rgba(0,0,0,0.5)' }}>
             <div style={{ padding: '11px 11px 9px', borderBottom: `1px solid ${HAIR}` }}>
               <div style={{ position: 'relative' }}>
-                <Search size={14} color={MUTE} style={{ position: 'absolute', left: 10, top: 11 }} />
+                <MagnifyingGlass size={14} color={MUTE} style={{ position: 'absolute', left: 10, top: 11 }} />
                 <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search people, companies, MPs…"
                   style={{ width: '100%', height: 36, padding: '0 30px', borderRadius: 9, color: TEXT, fontSize: 13.5, background: 'rgba(255,255,255,0.06)', border: `1px solid ${HAIR}`, outline: 'none', boxSizing: 'border-box' }} />
                 {search && <X size={15} color={MUTE} onClick={() => setSearch('')} style={{ position: 'absolute', right: 9, top: 10, cursor: 'pointer' }} />}
@@ -285,7 +286,7 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
               <div className="eb" style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
                 {search.trim()
                   ? `${panelList.length} match${panelList.length === 1 ? '' : 'es'}`
-                  : <><AlertTriangle size={11} color={VERM} /> Start at the top — sorted by what merits a look</>}
+                  : <><WarningDiamond size={11} color={VERM} /> Start at the top — sorted by what merits a look</>}
               </div>
             </div>
             <div className="sc" style={{ flex: 1, overflowY: 'auto', padding: '5px' }}>
@@ -297,7 +298,7 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
                     <span style={{ display: 'block', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.name}</span>
                     <span style={{ display: 'block', fontSize: 10.5, color: MUTE, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.role}</span>
                   </span>
-                  {n.conflict ? <AlertTriangle size={13} color={VERM} style={{ flex: '0 0 auto', opacity: n.conflictStrength === 'low' ? 0.4 : 1 }} />
+                  {n.conflict ? <WarningDiamond size={13} color={VERM} style={{ flex: '0 0 auto', opacity: n.conflictStrength === 'low' ? 0.4 : 1 }} />
                     : n.scrutiny >= 0.7 ? <span style={{ width: 7, height: 7, borderRadius: '50%', background: VERM, opacity: 0.75, flex: '0 0 auto' }} /> : null}
                 </div>
               ))}
@@ -345,11 +346,11 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
           <div className="in" style={{ position: 'absolute', bottom: 16, left: 12, right: 12, display: 'flex', gap: 9, alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap', zIndex: 12 }}>
             {!searchOpen && (
               <button onClick={() => setSearchOpen(true)} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 20, background: GOLD, border: `1px solid ${GOLD}`, color: '#1A1206', fontSize: 13, fontWeight: 700 }}>
-                <Search size={15} /> Start here · search &amp; leads
+                <MagnifyingGlass size={15} /> Start here · search &amp; leads
               </button>
             )}
             <button onClick={runExample} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', borderRadius: 20, background: 'rgba(232,182,90,0.14)', border: `1px solid rgba(232,182,90,0.45)`, color: GOLD, fontSize: 13, fontWeight: 600 }}>
-              <Share2 size={15} /> Example trail
+              <ShareNetwork size={15} /> Example trail
             </button>
           </div>
         )}
@@ -372,19 +373,19 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
                   <div style={{ fontSize: 12.5, color: MUTE, marginTop: 3 }}>{selNode.role}</div>
                   {selNode.scrutiny >= 0.7 && (
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 7, padding: '3px 9px', borderRadius: 6, background: 'rgba(229,101,75,0.14)', border: '1px solid rgba(229,101,75,0.5)', color: '#F0A593', fontSize: 11, fontFamily: MONO }}>
-                      <AlertTriangle size={12} /> Merits a look{selNode.scrutinyMoney ? ` · ${selNode.scrutinyMoney} in political money nearby` : ''}
+                      <WarningDiamond size={12} /> Merits a look{selNode.scrutinyMoney ? ` · ${selNode.scrutinyMoney} in political money nearby` : ''}
                     </div>
                   )}
                 </div>
                 <div style={{ display: 'flex', gap: 6, flex: '0 0 auto' }}>
-                  <IconBtn small onClick={(e) => { e.stopPropagation(); startTrace(); }}><Share2 size={16} /></IconBtn>
+                  <IconBtn small onClick={(e) => { e.stopPropagation(); startTrace(); }}><ShareNetwork size={16} /></IconBtn>
                   <IconBtn small onClick={(e) => { e.stopPropagation(); setSelected(null); setSheetUp(false); }}><X size={16} /></IconBtn>
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 11 }}>
                 <span style={{ fontFamily: MONO, fontSize: 10.5, color: MUTE }}>{selConns.length} connections{selNode.news && selNode.news.length ? ' · in the news' : ''}</span>
                 <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: GOLD }}>
-                  {sheetUp ? <>Less <ChevronDown size={14} /></> : <>Details <ChevronUp size={14} /></>}
+                  {sheetUp ? <>Less <CaretDown size={14} /></> : <>Details <CaretUp size={14} /></>}
                 </span>
               </div>
             </div>
@@ -399,7 +400,7 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
                   : low ? 'Flagged · lower priority' : 'Worth a look';
                 return (
                   <div style={{ display: 'flex', gap: 9, padding: '12px 13px', marginBottom: 16, borderRadius: 11, background: low ? 'rgba(154,160,173,0.10)' : 'rgba(229,101,75,0.12)', border: `1px solid ${low ? 'rgba(154,160,173,0.40)' : 'rgba(229,101,75,0.5)'}` }}>
-                    <AlertTriangle size={16} color={acc} style={{ flex: '0 0 auto', marginTop: 1 }} />
+                    <WarningDiamond size={16} color={acc} style={{ flex: '0 0 auto', marginTop: 1 }} />
                     <div>
                       <div style={{ fontSize: 11, fontWeight: 700, color: low ? '#AEB4C0' : '#F0A593', letterSpacing: '.12em', textTransform: 'uppercase' }}>Conflict-shaped · {head}</div>
                       <div style={{ fontSize: 13, color: low ? '#C7CBD3' : '#E8C7BC', lineHeight: 1.5, marginTop: 5 }}>{selNode.conflictReason}</div>
@@ -410,7 +411,7 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
               {/* trace from here (full width) */}
               <button onClick={startTrace} style={{ width: '100%', height: 42, borderRadius: 11, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 18,
                 background: 'rgba(232,182,90,0.12)', border: `1px solid rgba(232,182,90,0.4)`, color: GOLD, fontSize: 14, fontWeight: 600 }}>
-                <Share2 size={16} /> Trace a path from here
+                <ShareNetwork size={16} /> Trace a path from here
               </button>
 
               {/* news */}
@@ -510,7 +511,7 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
                 <span>Show me the leads →</span>
                 <span style={{ fontSize: 11.5, fontWeight: 600, opacity: 0.82 }}>connections ranked by what merits a look — start at the top</span>
               </span>
-              <Search size={18} style={{ flex: '0 0 auto' }} />
+              <MagnifyingGlass size={18} style={{ flex: '0 0 auto' }} />
             </div>
             <Para><b style={{ color: GOLD }}>Move around.</b> Drag the background to pan, scroll or pinch to zoom, drag a node to pull the web apart. A <span style={{ color: VERM, fontWeight: 700 }}>red ring</span> flags an entity that merits a look. The <Crosshair size={13} style={{ verticalAlign: '-2px' }} /> button refits everything to screen.</Para>
             <Para><b style={{ color: GOLD }}>Tap a node.</b> A panel slides up with who funds it, who sits where, and what’s been written. Tap the handle to expand it; tap the background to dismiss.</Para>
@@ -518,7 +519,7 @@ export default function OrreryGraph({ nodes: RAW_NODES, links: RAW_LINKS, types:
             <Para><b style={{ color: GOLD }}>Trails.</b> Trace a path between two figures to see exactly how they’re joined, step by step. Raise the dial and a weak link can break the chain; lower it and a hidden one completes it.</Para>
             <Para><b style={{ color: GOLD }}>The line we hold.</b> ORRERY surfaces public-record connections and lets you draw your own conclusion. It never alleges wrongdoing — a connection is a fact with a source attached.</Para>
             <div style={{ padding: '11px 13px', borderRadius: 10, background: 'rgba(229,101,75,0.08)', border: '1px solid rgba(229,101,75,0.25)', fontSize: 12.5, color: '#F0A593', display: 'flex', gap: 9 }}>
-              <AlertTriangle size={15} style={{ flex: '0 0 auto', marginTop: 1 }} />Drawn from public records — Companies House, the Electoral Commission and the UK Parliament. A connection is a sourced public-record fact, not a judgement or any allegation of wrongdoing.
+              <WarningDiamond size={15} style={{ flex: '0 0 auto', marginTop: 1 }} />Drawn from public records — Companies House, the Electoral Commission and the UK Parliament. A connection is a sourced public-record fact, not a judgement or any allegation of wrongdoing.
             </div>
           </div>
         </div>

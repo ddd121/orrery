@@ -11,13 +11,14 @@
  */
 import type { GraphNode, GraphLink, TypeConfig } from "@/lib/graph";
 import {
-  Landmark,
+  Bank,
   User,
-  Building2,
-  Flag,
-  Users,
-  Briefcase,
-} from "lucide-react";
+  Buildings,
+  FlagBanner,
+  UsersThree,
+  Megaphone,
+  IdentificationBadge,
+} from "@phosphor-icons/react";
 
 /* ---------- design tokens: "The Register" ---------- */
 /* Surfaces: flat near-black ground, borders not shadows. */
@@ -88,27 +89,28 @@ export const TYPE_COLORS: Record<string, string> = {
    (loadGraph builds `types`), but we keep a static fallback map so styling is
    stable even for types the live `types` lookup misses. */
 export const TYPE: Record<string, { label: string; color: string; icon: any }> = {
-  minister: { label: "Minister", color: TYPE_COLORS.minister, icon: Landmark },
-  mp: { label: "MP", color: TYPE_COLORS.mp, icon: Landmark },
-  peer: { label: "Peer", color: TYPE_COLORS.peer, icon: Landmark },
+  minister: { label: "Minister", color: TYPE_COLORS.minister, icon: IdentificationBadge },
+  mp: { label: "MP", color: TYPE_COLORS.mp, icon: IdentificationBadge },
+  peer: { label: "Peer", color: TYPE_COLORS.peer, icon: IdentificationBadge },
   donor: { label: "Donor", color: TYPE_COLORS.donor, icon: User },
-  company: { label: "Company", color: TYPE_COLORS.company, icon: Building2 },
-  party: { label: "Party", color: TYPE_COLORS.party, icon: Flag },
-  appg: { label: "APPG", color: TYPE_COLORS.appg, icon: Users },
-  department: { label: "Department", color: TYPE_COLORS.department, icon: Landmark },
-  government_body: { label: "Public body", color: TYPE_COLORS.government_body, icon: Landmark },
-  lobbyist: { label: "Lobbying", color: TYPE_COLORS.lobbyist, icon: Briefcase },
+  company: { label: "Company", color: TYPE_COLORS.company, icon: Buildings },
+  party: { label: "Party", color: TYPE_COLORS.party, icon: FlagBanner },
+  appg: { label: "APPG", color: TYPE_COLORS.appg, icon: UsersThree },
+  department: { label: "Department", color: TYPE_COLORS.department, icon: Bank },
+  government_body: { label: "Public body", color: TYPE_COLORS.government_body, icon: Bank },
+  lobbyist: { label: "Lobbying", color: TYPE_COLORS.lobbyist, icon: Megaphone },
   person: { label: "Person", color: TYPE_COLORS.person, icon: User },
 };
 
-/* entity-type icons resolved by name (entity_types.ui_icon from the database) */
+/* entity-type icons resolved by name (entity_types.ui_icon from the database).
+   Keys are the DB's ui_icon strings (unchanged); values now point at Phosphor. */
 export const ICONS: Record<string, any> = {
-  Landmark,
+  Landmark: Bank,
   User,
-  Building2,
-  Flag,
-  Users,
-  Briefcase,
+  Building2: Buildings,
+  Flag: FlagBanner,
+  Users: UsersThree,
+  Briefcase: Megaphone,
 };
 
 /* ------------------------------ small helpers ------------------------------ */

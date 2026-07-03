@@ -13,12 +13,13 @@
  * conflict-box styling (vermillion; low-priority greyed). Facts, not verdicts.
  */
 import React, { useMemo, useState } from 'react';
-import { ArrowLeft, AlertTriangle, Info, Compass, GitCompareArrows, Link2, Check } from 'lucide-react';
+import { ArrowLeft, WarningDiamond, Info, Graph, Path, LinkSimple, Check } from '@phosphor-icons/react';
 import {
-  GOLD, VERM, TEXT, MUTE, HAIR, MONO,
-  typeColor, typeIcon, typeLabel, confColor, tiesOf, idOf,
+  GOLD, VERM, TEXT, MUTE, HAIR, MONO, TYPO,
+  typeColor, typeIcon, typeLabel, tiesOf, idOf,
 } from '@/lib/graph-utils';
 import ForceGraph from '../components/ForceGraph';
+import TieRow from '../components/TieRow';
 
 const EGO_CAP = 40;
 
@@ -88,7 +89,7 @@ export default function EntityView({ entityId, nodes, links, types, onOpenEntity
       {/* scrutiny note (when flagged but not a full conflict, or alongside it) */}
       {!node.conflict && node.scrutiny >= 0.7 && (
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 14, padding: '6px 11px', borderRadius: 8, background: 'rgba(229,101,75,0.12)', border: '1px solid rgba(229,101,75,0.45)', color: '#F0A593', fontSize: 12, fontFamily: MONO }}>
-          <AlertTriangle size={13} /> Merits a look{node.scrutinyMoney ? ` · ${node.scrutinyMoney} in political money nearby` : ''}
+          <WarningDiamond size={13} /> Merits a look{node.scrutinyMoney ? ` · ${node.scrutinyMoney} in political money nearby` : ''}
         </div>
       )}
 
@@ -103,6 +104,12 @@ export default function EntityView({ entityId, nodes, links, types, onOpenEntity
 
           {groups.length === 0 && (
             <div style={{ fontSize: 13.5, color: MUTE, fontStyle: 'italic' }}>No connections recorded for this entity yet.</div>
+          )}
+
+          {groups.length > 0 && (
+            <p style={{ ...TYPO.caption, margin: '0 0 16px' }}>
+              Confidence is how sure we are a link is real and correctly identified. Strength is how much the tie matters once it is real. The two are independent: a certain link can be trivial, and a strong tie can be uncertain.
+            </p>
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
@@ -147,7 +154,7 @@ export default function EntityView({ entityId, nodes, links, types, onOpenEntity
                 onClick={onExplore}
                 style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, height: 44, borderRadius: 11, background: 'rgba(232,182,90,0.12)', border: `1px solid rgba(232,182,90,0.4)`, color: GOLD, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}
               >
-                <Compass size={16} /> Explore in the full network
+                <Graph size={16} /> Explore in the full network
               </button>
               <button
                 type="button"
@@ -157,7 +164,7 @@ export default function EntityView({ entityId, nodes, links, types, onOpenEntity
                 onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(232,182,90,0.4)')}
                 onMouseLeave={(e) => (e.currentTarget.style.borderColor = HAIR)}
               >
-                <GitCompareArrows size={16} /> Find a path from here
+                <Path size={16} /> Find a path from here
               </button>
               <ShareButton />
             </div>
@@ -174,39 +181,6 @@ export default function EntityView({ entityId, nodes, links, types, onOpenEntity
   );
 }
 
-/* ------------------------------ connection row ------------------------------ */
-function TieRow({ tie, types, onOpen }) {
-  const { other, rel, amount, confidence, strength, method } = tie;
-  const col = typeColor(other.type, types);
-  return (
-    <button
-      onClick={onOpen}
-      style={{ textAlign: 'left', width: '100%', cursor: 'pointer', padding: '12px 13px', borderRadius: 12, background: 'rgba(255,255,255,0.03)', border: `1px solid ${HAIR}`, color: TEXT, display: 'block' }}
-      onMouseEnter={(e) => (e.currentTarget.style.borderColor = `${col}66`)}
-      onMouseLeave={(e) => (e.currentTarget.style.borderColor = HAIR)}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-          <span style={{ width: 10, height: 10, borderRadius: '50%', background: col, flex: '0 0 auto' }} />
-          <span style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{other.name}</span>
-          {other.conflict && <AlertTriangle size={12} color={VERM} style={{ flex: '0 0 auto', opacity: other.conflictStrength === 'low' ? 0.45 : 1 }} />}
-        </div>
-        <span style={{ fontFamily: MONO, fontSize: 12, fontWeight: 700, color: confColor(confidence), flex: '0 0 auto' }}>{Math.round(confidence * 100)}%</span>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 7, fontFamily: MONO, fontSize: 11, color: MUTE }}>
-        <span style={{ color: '#B9C2D8' }}>{rel}</span>
-        {amount && <span>· {amount}</span>}
-        <span style={{ color: 'rgba(190,200,230,0.3)' }}>·</span>
-        <span style={{ color: MUTE, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{other.role}</span>
-      </div>
-      <div style={{ height: 3, borderRadius: 3, marginTop: 8, background: 'rgba(255,255,255,0.08)' }}>
-        <div style={{ height: '100%', borderRadius: 3, width: `${Math.max(4, strength * 100)}%`, background: col, opacity: 0.85 }} />
-      </div>
-      <div style={{ fontFamily: MONO, fontSize: 10, color: MUTE, marginTop: 7, opacity: 0.85 }}>via {method}</div>
-    </button>
-  );
-}
-
 /* ------------------------------ conflict banner ------------------------------ */
 function ConflictBanner({ node }) {
   const low = node.conflictStrength === 'low';
@@ -217,7 +191,7 @@ function ConflictBanner({ node }) {
     : low ? 'Flagged · lower priority' : 'Worth a look';
   return (
     <div style={{ display: 'flex', gap: 11, padding: '14px 15px', marginTop: 16, borderRadius: 12, background: low ? 'rgba(154,160,173,0.10)' : 'rgba(229,101,75,0.12)', border: `1px solid ${low ? 'rgba(154,160,173,0.40)' : 'rgba(229,101,75,0.5)'}` }}>
-      <AlertTriangle size={18} color={acc} style={{ flex: '0 0 auto', marginTop: 1 }} />
+      <WarningDiamond size={18} color={acc} style={{ flex: '0 0 auto', marginTop: 1 }} />
       <div>
         <div style={{ fontSize: 11, fontWeight: 700, color: low ? '#AEB4C0' : '#F0A593', letterSpacing: '.12em', textTransform: 'uppercase' }}>Conflict-shaped · {head} · merits a look</div>
         {node.conflictReason && <div style={{ fontSize: 14, color: low ? '#C7CBD3' : '#E8C7BC', lineHeight: 1.55, marginTop: 6 }}>{node.conflictReason}</div>}
@@ -258,7 +232,7 @@ function ShareButton() {
       title="Copy a shareable link to this dossier"
       style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, height: 44, borderRadius: 11, background: copied ? 'rgba(124,197,142,0.12)' : 'rgba(255,255,255,0.04)', border: `1px solid ${copied ? 'rgba(124,197,142,0.5)' : HAIR}`, color: copied ? '#7CC58E' : MUTE, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
     >
-      {copied ? <><Check size={16} /> Link copied</> : <><Link2 size={16} /> Copy link to this finding</>}
+      {copied ? <><Check size={16} /> Link copied</> : <><LinkSimple size={16} /> Copy link to this finding</>}
     </button>
   );
 }

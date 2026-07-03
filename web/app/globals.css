@@ -51,6 +51,18 @@ body {
   background: transparent;
 }
 
+/* Tie Row (DESIGN_SPEC.md "The Tie Row"): under 420px the confidence stamp drops its
+   tier word (percentage + colour still carry the tier) and the metrics line wraps to
+   two rows. Labels never drop. */
+@media (max-width: 420px) {
+  .tie-stamp-word {
+    display: none;
+  }
+  .tie-metrics {
+    row-gap: 6px;
+  }
+}
+
 /* motion is a persuasion device; this product is disinterested. Honour reduced motion fully. */
 @media (prefers-reduced-motion: reduce) {
   *,

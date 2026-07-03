@@ -9,7 +9,7 @@
  * dossier. The line we hold: facts, not verdicts — conflicts read "merits a look".
  */
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { Search, ArrowRight, AlertTriangle, Coins, Users, GitCompareArrows, ShieldCheck, Building2 } from 'lucide-react';
+import { MagnifyingGlass, ArrowRight, WarningDiamond, CurrencyGbp, UsersThree, Path, SealCheck, Buildings } from '@phosphor-icons/react';
 import {
   GOLD, VERM, TEXT, MUTE, HAIR, PANEL, MONO,
   typeColor, typeIcon, leads,
@@ -90,7 +90,7 @@ export default function HomeView({ nodes, links, types, onOpenEntity, onExplore,
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20, marginTop: 18, alignItems: 'start' }}>
           {/* conflicts of interest */}
           <BoardColumn
-            icon={<AlertTriangle size={16} color={VERM} />}
+            icon={<WarningDiamond size={16} color={VERM} />}
             title="Conflicts of interest"
             sub={`${conflictCount} flagged · strong signals first`}
           >
@@ -102,7 +102,7 @@ export default function HomeView({ nodes, links, types, onOpenEntity, onExplore,
 
           {/* where interests converge — cross-register standouts */}
           <BoardColumn
-            icon={<Building2 size={16} color="#6FC3B8" />}
+            icon={<Buildings size={16} color="#6FC3B8" />}
             title="Where interests converge"
             sub="Companies several figures share · donor-and-contractor loops"
           >
@@ -114,7 +114,7 @@ export default function HomeView({ nodes, links, types, onOpenEntity, onExplore,
 
           {/* the money behind the parties */}
           <BoardColumn
-            icon={<Coins size={16} color={GOLD} />}
+            icon={<CurrencyGbp size={16} color={GOLD} />}
             title="The money behind the parties"
             sub="Largest donations on record"
           >
@@ -157,7 +157,7 @@ function HeroSearch({ nodes, types, onOpenEntity, onConnect }) {
   return (
     <div style={{ maxWidth: 560, margin: '0 auto' }}>
       <div ref={boxRef} style={{ position: 'relative' }}>
-        <Search size={18} color={MUTE} style={{ position: 'absolute', left: 16, top: 16 }} />
+        <MagnifyingGlass size={18} color={MUTE} style={{ position: 'absolute', left: 16, top: 16 }} />
         <input
           value={q}
           onChange={(e) => { setQ(e.target.value); setOpen(true); }}
@@ -214,7 +214,7 @@ function HeroSearch({ nodes, types, onOpenEntity, onConnect }) {
         onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(232,182,90,0.16)')}
         onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(232,182,90,0.08)')}
       >
-        <GitCompareArrows size={14} /> Find the connection between two names
+        <Path size={14} /> Find the connection between two names
       </button>
     </div>
   );
@@ -231,7 +231,7 @@ function CredibilityStrip({ total, conflictCount, registerCount }) {
   return (
     <div style={{ borderBottom: `1px solid ${HAIR}`, background: 'rgba(255,255,255,0.015)' }}>
       <div style={{ maxWidth: 1080, margin: '0 auto', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
-        <ShieldCheck size={14} color={MUTE} style={{ flex: '0 0 auto' }} />
+        <SealCheck size={14} color={MUTE} style={{ flex: '0 0 auto' }} />
         {items.map((t, i) => (
           <React.Fragment key={t}>
             {i > 0 && <span style={{ color: 'rgba(190,200,230,0.25)' }}>·</span>}
@@ -295,7 +295,7 @@ function ConflictCard({ lead, types, onOpen }) {
           <span style={{ display: 'block', fontSize: 11, color: MUTE, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{node.role}</span>
         </span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 6, flex: '0 0 auto', background: low ? 'rgba(154,160,173,0.14)' : 'rgba(229,101,75,0.16)', border: `1px solid ${low ? 'rgba(154,160,173,0.4)' : 'rgba(229,101,75,0.5)'}`, color: low ? '#C7CBD3' : '#F0A593', fontFamily: MONO, fontSize: 9.5, letterSpacing: '.06em', textTransform: 'uppercase' }}>
-          <AlertTriangle size={10} /> merits a look
+          <WarningDiamond size={10} /> merits a look
         </span>
       </div>
       {reason && <div style={{ fontSize: 13, color: low ? '#C7CBD3' : '#E8C7BC', lineHeight: 1.5 }}>{reason}</div>}
@@ -338,7 +338,7 @@ function MoneyCard({ lead, types, onOpen }) {
       {behind.length > 0 && (
         <div style={{ marginTop: 11, paddingTop: 10, borderTop: `1px solid ${HAIR}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 7 }}>
-            <Users size={12} color={MUTE} />
+            <UsersThree size={12} color={MUTE} />
             <span style={{ fontFamily: MONO, fontSize: 9.5, letterSpacing: '.1em', textTransform: 'uppercase', color: MUTE }}>The people behind it</span>
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
