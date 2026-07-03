@@ -88,9 +88,14 @@ def score(a, b, surname_u):
             w += math.log(0.4 / 0.20)             # shared initial only
         else:
             return 0.05, j  # conflicting forenames -> different people; neighbours must NOT override
-    # shared-neighbour corroboration (graph-aware): the same connections => likely same person
+    # shared-neighbour corroboration (graph-aware) is REQUIRED for a confident match: the same
+    # connections => likely the same person. NO shared neighbour is evidence AGAINST (a same-name
+    # coincidence — the three "Martin Taylor"s with distinct donor ids), mirroring dedupe_v1's
+    # shared-neighbour rule; without it a pair can at most be a lead, never an auto-merge.
     if inter:
         w += math.log((0.5 + 0.5 * j) / 0.1)
+    else:
+        w += math.log(0.15 / 0.85)
     # prior odds low (most same-surname pairs are different people)
     llr = w + math.log(0.02 / 0.98)
     return 1.0 / (1.0 + math.exp(-llr)), j
