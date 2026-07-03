@@ -146,7 +146,11 @@ def build_sql(csv_text: str, source_url: str, limit: int):
         "relationship_assertions":
             "id, source_document_id, statement_type, from_mention_id, to_mention_id, valid_from, valid_to, raw_attributes",
     }
-    parts = []
+    # Idempotent re-ingest: drop any prior EC load first (FK cascade removes its mentions +
+    # assertions + resolutions) so re-running with a wider window never duplicates rows or
+    # collides on the (source_code, external_ref) unique key. Raw layer is the only home;
+    # recompute rebuilds the resolution layer from it.
+    parts = ["delete from public.source_documents where source_code = 'electoral_commission';"]
     for table in ("source_documents", "mentions", "relationship_assertions"):
         if rows[table]:
             parts.append(
