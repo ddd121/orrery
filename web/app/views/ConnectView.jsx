@@ -381,6 +381,9 @@ function PathResult({ path, hops, pathGraph, summary, types, nodeById, onOpenEnt
         </div>
       )}
 
+      {/* confidence legend — how to read the per-hop % below */}
+      <ConfidenceLegend />
+
       {/* left-to-right sourced chain (wraps on mobile) */}
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'stretch', gap: 10, rowGap: 16 }}>
         {path.map((id, i) => {
@@ -446,6 +449,26 @@ function NodePill({ node, types, onOpen }) {
         {node.conflict && <span style={{ display: 'block', fontFamily: MONO, fontSize: 8.5, letterSpacing: '.08em', textTransform: 'uppercase', color: VERM, opacity: node.conflictStrength === 'low' ? 0.55 : 1 }}>merits a look</span>}
       </span>
     </button>
+  );
+}
+
+/* a compact key to the per-hop confidence colours (mirrors confColor's bands). */
+function ConfidenceLegend() {
+  const items = [
+    { c: '#7CC58E', label: 'Established ≥80%', hint: 'matched on an official identifier' },
+    { c: GOLD, label: 'Probable 50–79%' },
+    { c: VERM, label: 'Lead <50%', hint: 'weaker — treat as a pointer' },
+  ];
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 18, padding: '8px 12px', borderRadius: 10, background: 'rgba(255,255,255,0.025)', border: `1px solid ${HAIR}` }}>
+      <span style={{ fontFamily: MONO, fontSize: 9.5, letterSpacing: '.12em', textTransform: 'uppercase', color: MUTE }}>Confidence</span>
+      {items.map((it) => (
+        <span key={it.label} title={it.hint || ''} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: MONO, fontSize: 11, color: '#B9C2D8' }}>
+          <span style={{ width: 9, height: 9, borderRadius: '50%', background: it.c, flex: '0 0 auto' }} />
+          {it.label}
+        </span>
+      ))}
+    </div>
   );
 }
 
