@@ -1,14 +1,19 @@
 # ORRERY — Build Log & Resume Guide
 
 > Living handoff doc. If a session resumes cold, read this + `CLAUDE.md` + the engine spec.
-> Last updated: 2026-06-25.
+> Last updated: 2026-06-30.
 
 ## Status
 
-Milestones **1–6 done**. A three-register UK power-map (Companies House + Electoral
-Commission + Parliament) is **live** at `localhost:3000`, pushed to
-`github.com/ddd121/orrery` (`main`). The cross-source fuzzy person matcher is **built but
-report-only** — nothing inferred is on the public graph yet.
+Milestones **1–7 done + a findings-first UX rebuild**. A **5-register** UK power-map
+(Companies House · Electoral Commission · Parliament members · Register of Members' Interests ·
+**Contracts Finder**) is **live** at `localhost:3000`, pushed to `github.com/ddd121/orrery`
+(`main`). **2,074 entities / ~5,800 statements / 95 conflict leads (24 strong)**. The app is
+findings-first (Home board · Dossier · A→B Connect · canvas Explore at 2,074 nodes via
+react-force-graph). Resolution moat: deterministic resolve + **§4.4 graph-aware dedup done**;
+the calibrated cross-source matcher is **report-only, WIP** (`resolution/calibrate_run.py` +
+`gold_set.py` — nothing inferred about a *named person* is on the public graph). See the Data
+state + roadmap sections below.
 
 ## Non-negotiable line (carry this)
 
@@ -18,6 +23,21 @@ report-only** — nothing inferred is on the public graph yet.
   nothing uncertain about a *named person* is merged or shown as a fact.
 - **Facts, not verdicts.** Every edge cites a source. Scrutiny = "merits a look", never
   "is dodgy". British English. Precision over recall.
+
+## Model routing (delegation convention — confirmed 2026-06-30)
+
+Route delegated work by task type (Roy's call). Full detail in memory `model-routing-convention.md`.
+- **Fable 5** — hardest reasoning / architecture / strategy, as a *discrete strategy subagent*
+  (e.g. the calibration moat), not the always-on main loop. $10/$50 per 1M.
+- **Sonnet 5** — the coding bulk (near-Opus quality at ~⅓ price). $3/$15 (intro $2/$10 to 31 Aug 2026).
+- **Haiku 4.5** — cheap mechanical passes (greps/renames/scans; no `effort` param). $1/$5, 200K ctx.
+- **Opus 4.8** — orchestrator (main loop) + adversarial QA / review. $5/$25.
+
+Mechanic: the main-loop model is user-selected (can't hot-swap mid-session — switching invalidates
+the prompt cache); route **subagents** via the Agent tool's `model` param, or `Workflow
+agent({model, effort})`. Per-subagent **effort** is Workflow-only (the Agent tool sets model, not
+effort); Workflows need explicit opt-in. Announce the model + rough cost per delegation. Effort:
+`xhigh` default for coding/agentic, `high` = efficient balance, `max` for QA/correctness.
 
 ## Supabase / secrets (gotchas)
 
