@@ -299,8 +299,23 @@ function HelpSheet({ onClose }) {
           <X size={22} color={MUTE} onClick={onClose} style={{ cursor: 'pointer' }} />
         </div>
         <HelpPara><b style={{ color: GOLD }}>It maps the money and companies around UK politics.</b> Every entity is a person, company or party; every connection is drawn from a public register, and each one cites its source.</HelpPara>
-        <HelpPara><b style={{ color: GOLD }}>Start with the findings.</b> The board surfaces conflicts of interest worth a look and the money behind the parties. Open any card, or search a name, to see that entity's sourced connections.</HelpPara>
-        <HelpPara><b style={{ color: GOLD }}>Confidence.</b> A fuzzy name match is weaker than a Companies House identifier. Each connection shows how sure we are it's real — and where it came from.</HelpPara>
+        <HelpPara><b style={{ color: GOLD }}>Start with the findings.</b> The board surfaces conflicts of interest worth a look and the money behind the parties. Open any card, or search a name, to see that entity's sourced connections. <b>Connect</b> traces a path between any two names.</HelpPara>
+
+        <HelpHead>The registers we read</HelpHead>
+        <ul style={{ margin: '0 0 15px', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 7 }}>
+          <SourceItem name="Companies House">directors, shareholders and persons with significant control of UK companies.</SourceItem>
+          <SourceItem name="Electoral Commission">donations to political parties and holders of elected office.</SourceItem>
+          <SourceItem name="Parliament (Members)">MPs, their party and their committee seats.</SourceItem>
+          <SourceItem name="Register of Members' Financial Interests">the earnings, directorships, shareholdings and gifts MPs must declare.</SourceItem>
+          <SourceItem name="Contracts Finder">public contracts awarded to companies. Framework and dynamic-purchasing values are the buyer's published <i>ceiling</i>, not guaranteed spend.</SourceItem>
+        </ul>
+
+        <HelpHead>What “merits a look” means</HelpHead>
+        <HelpPara>A structural overlap drawn from those records — for instance an MP who sits on a committee overseeing a sector while also directing a company in it. We show the overlap with its receipts and rank how closely the two sides align. It is a prompt to look, never an allegation.</HelpPara>
+
+        <HelpHead>Confidence, and strength</HelpHead>
+        <HelpPara><b style={{ color: GOLD }}>Confidence</b> is how sure we are a link is real and correctly identified — a shared Companies House number is near-certain; a name-only match is weaker and shown as such. <b style={{ color: GOLD }}>Strength</b> is how meaningful the tie is once it's real. Links established on an official identifier render solid; anything inferred renders dotted, and nothing uncertain about a named person is ever stated as fact.</HelpPara>
+
         <HelpPara><b style={{ color: GOLD }}>Explore</b> opens the full network for the curious — but you never need it to get an answer.</HelpPara>
         <div style={{ padding: '11px 13px', borderRadius: 10, background: 'rgba(229,101,75,0.08)', border: '1px solid rgba(229,101,75,0.25)', fontSize: 12.5, color: '#F0A593', lineHeight: 1.55 }}>
           A connection is a sourced public-record fact, not a judgement or any allegation of wrongdoing. ORRERY surfaces overlaps and lets you draw your own conclusion.
@@ -311,6 +326,19 @@ function HelpSheet({ onClose }) {
 }
 function HelpPara({ children }) {
   return <p style={{ fontSize: 14, lineHeight: 1.64, color: '#C7CEDF', marginBottom: 15 }}>{children}</p>;
+}
+function HelpHead({ children }) {
+  return (
+    <div style={{ fontFamily: MONO, fontSize: 10.5, letterSpacing: '.16em', textTransform: 'uppercase', color: GOLD, opacity: 0.85, margin: '4px 0 10px' }}>{children}</div>
+  );
+}
+function SourceItem({ name, children }) {
+  return (
+    <li style={{ fontSize: 13, lineHeight: 1.5, color: '#C7CEDF', paddingLeft: 13, position: 'relative' }}>
+      <span style={{ position: 'absolute', left: 0, top: 7, width: 5, height: 5, borderRadius: '50%', background: GOLD, opacity: 0.7 }} />
+      <b style={{ color: '#E7ECF7', fontWeight: 700 }}>{name}</b> — {children}
+    </li>
+  );
 }
 
 /* --------------------------------- bits --------------------------------- */

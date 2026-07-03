@@ -1,19 +1,33 @@
 # ORRERY — Build Log & Resume Guide
 
 > Living handoff doc. If a session resumes cold, read this + `CLAUDE.md` + the engine spec.
-> Last updated: 2026-06-30.
+> Last updated: 2026-07-03.
 
 ## Status
 
-Milestones **1–7 done + a findings-first UX rebuild**. A **5-register** UK power-map
-(Companies House · Electoral Commission · Parliament members · Register of Members' Interests ·
-**Contracts Finder**) is **live** at `localhost:3000`, pushed to `github.com/ddd121/orrery`
-(`main`). **2,074 entities / ~5,800 statements / 95 conflict leads (24 strong)**. The app is
-findings-first (Home board · Dossier · A→B Connect · canvas Explore at 2,074 nodes via
-react-force-graph). Resolution moat: deterministic resolve + **§4.4 graph-aware dedup done**;
-the calibrated cross-source matcher is **report-only, WIP** (`resolution/calibrate_run.py` +
-`gold_set.py` — nothing inferred about a *named person* is on the public graph). See the Data
-state + roadmap sections below.
+Milestones **1–7 done + a findings-first UX rebuild**; now on a **launch-readiness push**
+(calibration → depth → polish → international; hosting/auth excluded per Roy — "v last").
+A **5-register** UK power-map (Companies House · Electoral Commission · Parliament members ·
+Register of Members' Interests · **Contracts Finder**) is **live** at `localhost:3000`, pushed to
+`github.com/ddd121/orrery` (`main`). **2,074 entities / ~5,800 statements / 95 conflict leads
+(24 strong)**. The app is findings-first (Home board · Dossier · A→B Connect · canvas Explore at
+2,074 nodes via react-force-graph). Resolution moat: deterministic resolve + **§4.4 graph-aware
+dedup done**.
+
+**Calibration moat — validated & correctly report-only (2026-07-03).** The cross-source person
+matcher stays **report-only with 0 auto-merges — the right state, proven, not a shortfall.** The
+bootstrap gold set is *circular* (labels "same person" by the shared-neighbour feature the score
+keys on → the 0.984 threshold is a tautology, and any pair clearing it was already merged by the
+deterministic dedup); on the one non-circular test the matcher has zero separating power. **No
+scoring change fixes it on this data** — calibration is **data-limited**. Genuine completion path:
+Phase 2 depth → a ~150-pair hand-labelled pilot (residual base-rate) → LLM adjudication **last**,
+gated on confirming `ANTHROPIC_API_KEY` with Roy. The report's reliability curve was *inverted*;
+root cause found + fixed — `gold_set` had mislabelled same-canonical cross-source pairs (e.g.
+'Kirith Entwistle' vs 'Kirith Entwistle MP') as "different people"; the `same_canonical` fix (plus
+keyless surname-freq + neighbour-IDF hygiene) makes it **monotonic** (0.95→0.65, 0.98→0.94,
+0.99→1.00) with real thresholds (95% @ 0.962). **Still 0 proposed cross-source merges — nothing
+inferred about a named person is on the public graph — the line holds.** See the Data state +
+roadmap sections below.
 
 ## Non-negotiable line (carry this)
 
