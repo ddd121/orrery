@@ -5,21 +5,27 @@ measure precision — but hand-labelling thousands of pairs is not available for
 *bootstrap* labels from the deterministic dedup (`dedupe_v1.sql`), which already made
 precision-safe decisions we trust:
 
-  POSITIVES (same person)   — two person mentions that share a normalised name-key AND a
-                              *specific* (non-hub) graph neighbour, OR a DOB-year. These are
-                              exactly the merges dedupe_v1 performs (§4.4 shared-neighbour rule):
-                              e.g. "COWLING, Tom" and "Tom Cowling" co-directing one named company.
-  NEGATIVES (different)      — (a) HARD: two person mentions with the SAME name-key but NO shared
-                              specific neighbour and NO DOB-year match — the pairs dedupe_v1
-                              deliberately LEFT apart (the three "Martin Taylor"s with distinct EC
-                              donor ids). (b) EASY: a random sample of different-surname pairs.
+  POSITIVES (same person)   — two person mentions that either (a) ALREADY resolve to one canonical
+                              entity (a deterministic id match — same Parliament member id, CH
+                              officer id, EC DonorId — established they are the same person), or
+                              (b) share a normalised name-key AND a *specific* (non-hub) graph
+                              neighbour, OR a DOB-year (the merges dedupe_v1 performs, §4.4).
+                              e.g. "COWLING, Tom" and "Tom Cowling" co-directing one named company;
+                              or "Kirith Entwistle" and "Kirith Entwistle MP" across two registers.
+  NEGATIVES (different)      — (a) HARD: two person mentions with the SAME name-key that resolved
+                              to DIFFERENT canonical entities, with NO shared specific neighbour and
+                              NO DOB-year match — the pairs dedupe_v1 deliberately LEFT apart (the
+                              three "Martin Taylor"s with distinct EC donor ids). (b) EASY: a random
+                              sample of different-surname pairs.
 
-Why this is honest, and its ceiling: the positives are the *easy* same-person cases (a literal
-shared company/donor). The genuinely-ambiguous band — same name, plausibly-but-not-certainly the
-same person, no shared specific neighbour — is exactly what the hard negatives represent, and
-bootstrap labelling cannot adjudicate it (that needs hand-labels or LLM adjudication, §4.5). So
-this gold set validates the *ends* of the score range well and is conservative in the middle. We
-say so explicitly in the report.
+Why this is honest, and its ceiling: the positives include the deterministically-certain
+same-person pairs (shared id) plus the easy graph-corroborated ones. The genuinely-ambiguous band
+— same name, DIFFERENT resolved entities, no shared specific neighbour — is what the hard negatives
+represent, and bootstrap labelling cannot adjudicate whether any of *those* are really the same
+person (that needs hand-labels or LLM adjudication, §4.5). So this gold set validates the reliability
+of the score honestly (a monotonic curve) and is conservative in that ambiguous middle. NB an earlier
+version mislabelled same-canonical cross-source pairs as hard negatives, which inverted the curve —
+fixed by the same_canonical check below.
 
 EVERYTHING IS KEYED BY STABLE MENTION-ID PAIRS. Canonical-entity ids are regenerated on every
 resolution run (resolve_v3 truncates + rebuilds); mention ids are immutable raw-layer keys. A
@@ -152,6 +158,16 @@ def build_gold(mentions: dict[str, dict], rng_seed: int = 17,
                 dob_match = bool(
                     (ma["birth_year"] and ma["birth_year"] == mb["birth_year"])
                 )
+                # Two mentions that ALREADY resolve to one canonical entity are, by definition,
+                # the same person — deterministic id resolution (a shared Parliament member id,
+                # CH officer id, etc.) established it. Labelling such a pair a "hard negative"
+                # just because their per-mention neighbourhoods don't overlap in this slice is
+                # a label bug: it put ~97% of the bootstrap's "different people" pool on
+                # genuinely-same people (e.g. 'Kirith Entwistle' vs 'Kirith Entwistle MP' across
+                # the Members API and the interests register), which inverted the reliability
+                # curve. Treat same-canonical as a positive; only DIFFERENT canonical entities
+                # with no shared neighbour / DOB are the true held-apart residual.
+                same_canonical = bool(ma["cid"]) and ma["cid"] == mb["cid"]
                 row = {
                     "mid_a": a, "mid_b": b,
                     "name_a": ma["raw"], "name_b": mb["raw"],
@@ -160,12 +176,17 @@ def build_gold(mentions: dict[str, dict], rng_seed: int = 17,
                     "shared_neighbours": sorted(shared),
                     "cid_a": ma["cid"], "cid_b": mb["cid"],
                 }
-                if shared or dob_match:
+                if same_canonical or shared or dob_match:
                     row["label"] = 1
-                    row["kind"] = "pos_same_name_shared_nbr" if shared else "pos_same_name_dob"
+                    row["kind"] = (
+                        "pos_same_canonical" if same_canonical
+                        else "pos_same_name_shared_nbr" if shared
+                        else "pos_same_name_dob"
+                    )
                     row["reason"] = (
                         f"same name-key '{key}'; "
-                        + (f"shares {len(shared)} specific neighbour(s)" if shared
+                        + ("one resolved entity already (deterministic id match)" if same_canonical
+                           else f"shares {len(shared)} specific neighbour(s)" if shared
                            else f"same birth-year {ma['birth_year']}")
                     )
                     pos.append(row)
@@ -173,8 +194,8 @@ def build_gold(mentions: dict[str, dict], rng_seed: int = 17,
                     row["label"] = 0
                     row["kind"] = "neg_same_name_no_link"
                     row["reason"] = (
-                        f"same name-key '{key}' but NO shared specific neighbour and no DOB-year "
-                        f"match — held apart by dedupe_v1 (distinct people)"
+                        f"same name-key '{key}' but DIFFERENT resolved entities with NO shared "
+                        f"specific neighbour and no DOB-year match — held apart by dedupe_v1"
                     )
                     hard_neg.append(row)
 

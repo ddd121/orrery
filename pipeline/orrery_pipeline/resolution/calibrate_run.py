@@ -60,6 +60,7 @@ def main() -> int:
         mentions = gold_set.load_person_mentions(con)
         gold = gold_set.build_gold(mentions)
         su = surname_u(mentions.values())
+        nd = fuzzy_match.neighbour_degree(mentions.values())
 
         pairs: list[tuple[float, int]] = []
         per_kind: dict[str, list[float]] = defaultdict(list)
@@ -68,7 +69,7 @@ def main() -> int:
                 a, b = mentions.get(row["mid_a"]), mentions.get(row["mid_b"])
                 if not a or not b:
                     continue
-                p, _ = fuzzy_match.score(a, b, su)
+                p, _ = fuzzy_match.score(a, b, su, nd)
                 pairs.append((p, row["label"]))
                 per_kind[kind].append(p)
 

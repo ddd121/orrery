@@ -26,9 +26,13 @@ import os
 from collections import defaultdict
 
 from ..ingestion.companies_house import apply_sql  # noqa (available if we later apply)
+from .uk_surnames import SURNAME_FREQ
 
 TAU_HIGH = 0.90
 TAU_LOW = 0.60
+# Floor for surname frequency u — never let a surname be treated as arbitrarily rare
+# (an unseen or single-mention surname must not blow up the rarity weight unboundedly).
+SURNAME_U_FLOOR = 1e-5
 TITLES = {"mr", "mrs", "ms", "miss", "dr", "sir", "dame", "lord", "lady", "rt",
           "hon", "the", "honourable", "rev", "prof", "professor", "baroness", "earl",
           "councillor", "cllr", "qc", "kc", "mp"}
@@ -71,10 +75,35 @@ def load(conn):
     return persons
 
 
-def score(a, b, surname_u):
-    # surname (block guarantees equal): rarer surname => larger positive weight
-    u = max(surname_u.get(a["surname"], 1e-6), 1e-6)
+def neighbour_degree(items) -> dict:
+    """Degree of every neighbour id = how many person-nodes link to it (engine-spec §4.4
+    graph-aware pass, IDF side). A neighbour shared by many people (a near-hub — a big donor,
+    a large employer) is weak evidence two same-named people are the same; a low-degree,
+    distinctive shared neighbour is strong evidence. `items` is any iterable of dicts with an
+    'nbrs' set (persons from `load`, or mentions from `gold_set.load_person_mentions`)."""
+    degree: dict = defaultdict(int)
+    for it in items:
+        for nbr in it.get("nbrs", ()):
+            degree[nbr] += 1
+    return degree
+
+
+def score(a, b, surname_u, neighbour_degree_map=None):
+    # surname (block guarantees equal): rarer surname => larger positive weight.
+    #
+    # Fix 1 (reliability inversion, cause A): in-corpus frequency alone massively over-rates
+    # rarity for common British surnames that just happen to appear a handful of times in our
+    # small (~1,800-mention) corpus — e.g. "Taylor" at 3/1834 looks like u~0.0016 (rare) when
+    # its true GB share is ~0.45%. Blend in the external SURNAME_FREQ table and take the LARGER
+    # of the two estimates: a common surname must always get its true (high) frequency and
+    # therefore a small rarity weight, regardless of how few times it happens to show up here.
+    # The in-corpus estimate still dominates for surnames absent from SURNAME_FREQ (safe
+    # fallback), and SURNAME_U_FLOOR keeps any surname from being treated as arbitrarily rare.
+    in_corpus_u = surname_u.get(a["surname"], SURNAME_U_FLOOR)
+    external_u = SURNAME_FREQ.get(a["surname"], 0.0)
+    u = max(external_u, in_corpus_u, SURNAME_U_FLOOR)
     w = math.log(0.9 / u)
+
     inter = len(a["nbrs"] & b["nbrs"])
     union = len(a["nbrs"] | b["nbrs"]) or 1
     j = inter / union
@@ -92,8 +121,18 @@ def score(a, b, surname_u):
     # connections => likely the same person. NO shared neighbour is evidence AGAINST (a same-name
     # coincidence — the three "Martin Taylor"s with distinct donor ids), mirroring dedupe_v1's
     # shared-neighbour rule; without it a pair can at most be a lead, never an auto-merge.
+    #
+    # Fix 2 (reliability inversion, cause B): a raw Jaccard/count treats every shared neighbour
+    # equally, but a near-hub shared neighbour (connected to many people — a large donor, a big
+    # employer) is weak evidence of identity, while a low-degree, distinctive shared neighbour is
+    # strong evidence. Weight each shared neighbour by IDF: 1 / (1 + ln(1 + degree)), so a
+    # degree-1 exclusive connection contributes ~1.0 and a degree-50 near-hub contributes ~0.20.
     if inter:
-        w += math.log((0.5 + 0.5 * j) / 0.1)
+        degmap = neighbour_degree_map or {}
+        shared = a["nbrs"] & b["nbrs"]
+        idf_weight = sum(1.0 / (1.0 + math.log1p(degmap.get(n, 1))) for n in shared)
+        idf_avg = idf_weight / len(shared)  # in (0, 1]; 1.0 = maximally distinctive
+        w += math.log((0.5 + 0.5 * idf_avg) / 0.1)
     else:
         w += math.log(0.15 / 0.85)
     # prior odds low (most same-surname pairs are different people)
@@ -101,7 +140,9 @@ def score(a, b, surname_u):
     return 1.0 / (1.0 + math.exp(-llr)), j
 
 
-def candidates(persons, surname_u):
+def candidates(persons, surname_u, neighbour_degree_map=None):
+    if neighbour_degree_map is None:
+        neighbour_degree_map = neighbour_degree(persons.values())
     blocks = defaultdict(list)
     for cid, p in persons.items():
         if p["surname"]:
@@ -112,7 +153,7 @@ def candidates(persons, surname_u):
             for k in range(i + 1, len(ids)):
                 a, b = persons[ids[i]], persons[ids[k]]
                 cross = bool(a["sources"] ^ b["sources"]) or not (a["sources"] & b["sources"])
-                p, j = score(a, b, surname_u)
+                p, j = score(a, b, surname_u, neighbour_degree_map)
                 out.append((p, j, ids[i], ids[k], cross))
     out.sort(reverse=True)
     return out
