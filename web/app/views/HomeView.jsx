@@ -9,7 +9,7 @@
  * dossier. The line we hold: facts, not verdicts — conflicts read "merits a look".
  */
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { Search, ArrowRight, AlertTriangle, Coins, Users, GitCompareArrows, ShieldCheck } from 'lucide-react';
+import { Search, ArrowRight, AlertTriangle, Coins, Users, GitCompareArrows, ShieldCheck, Building2 } from 'lucide-react';
 import {
   GOLD, VERM, TEXT, MUTE, HAIR, PANEL, MONO,
   typeColor, typeIcon, leads,
@@ -70,7 +70,7 @@ export default function HomeView({ nodes, links, types, onOpenEntity, onExplore,
       </section>
 
       {/* ------------------------------ CREDIBILITY STRIP ------------------------------ */}
-      <CredibilityStrip total={nodes.length} conflictCount={conflictCount} />
+      <CredibilityStrip total={nodes.length} conflictCount={conflictCount} registerCount={leadData.registers.length} />
 
       {/* -------------------------------- FINDINGS BOARD -------------------------------- */}
       <section style={{ maxWidth: 1080, margin: '0 auto', padding: '8px 16px 64px' }}>
@@ -97,6 +97,18 @@ export default function HomeView({ nodes, links, types, onOpenEntity, onExplore,
             {leadData.conflicts.length === 0 && <EmptyNote>No conflict-shaped overlaps in this dataset yet.</EmptyNote>}
             {leadData.conflicts.slice(0, 8).map((c) => (
               <ConflictCard key={c.node.id} lead={c} types={types} onOpen={() => onOpenEntity(c.node.id)} />
+            ))}
+          </BoardColumn>
+
+          {/* where interests converge — cross-register standouts */}
+          <BoardColumn
+            icon={<Building2 size={16} color="#6FC3B8" />}
+            title="Where interests converge"
+            sub="Companies several figures share · donor-and-contractor loops"
+          >
+            {leadData.concentrations.length === 0 && <EmptyNote>No cross-register concentrations in this dataset yet.</EmptyNote>}
+            {leadData.concentrations.slice(0, 8).map((c) => (
+              <ConcentrationCard key={c.node.id} lead={c} types={types} onOpen={onOpenEntity} />
             ))}
           </BoardColumn>
 
@@ -209,10 +221,10 @@ function HeroSearch({ nodes, types, onOpenEntity, onConnect }) {
 }
 
 /* ----------------------------- credibility strip ----------------------------- */
-function CredibilityStrip({ total, conflictCount }) {
+function CredibilityStrip({ total, conflictCount, registerCount }) {
   const items = [
     `${total.toLocaleString('en-GB')} entities`,
-    '4 public registers',
+    `${registerCount || 6} public registers`,
     `${conflictCount} leads`,
     'every link sourced',
   ];
@@ -339,6 +351,66 @@ function MoneyCard({ lead, types, onOpen }) {
         </div>
       )}
     </div>
+  );
+}
+
+function ConcentrationCard({ lead, types, onOpen }) {
+  const { node, people, isDonor, isContractor } = lead;
+  const col = typeColor(node.type, types);
+  const Icon = typeIcon(node.type, types);
+  const loop = isDonor && isContractor;
+  return (
+    <div
+      className="in"
+      style={{ padding: '14px 15px', borderRadius: 13, background: loop ? 'rgba(232,182,90,0.06)' : 'rgba(111,195,184,0.05)', border: `1px solid ${loop ? 'rgba(232,182,90,0.34)' : 'rgba(111,195,184,0.26)'}` }}
+    >
+      <button
+        onClick={() => onOpen(node.id)}
+        style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: TEXT }}
+      >
+        <span style={{ width: 30, height: 30, borderRadius: 9, display: 'grid', placeItems: 'center', flex: '0 0 auto', background: `${col}22`, border: `1px solid ${col}55` }}>
+          <Icon size={16} color={col} />
+        </span>
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ display: 'block', fontSize: 14.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{node.name}</span>
+          <span style={{ display: 'block', fontSize: 11, color: MUTE }}>{people.length} {people.length === 1 ? 'figure' : 'figures'} connected · {node.role}</span>
+        </span>
+      </button>
+
+      {(isDonor || isContractor) && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+          {loop ? (
+            <Badge color={GOLD} label="Donor + public contracts" strong />
+          ) : (
+            <>
+              {isDonor && <Badge color="#E08AAE" label="Political donor" />}
+              {isContractor && <Badge color="#6F9BD8" label="Public contracts" />}
+            </>
+          )}
+        </div>
+      )}
+
+      {people.length > 0 && (
+        <div style={{ marginTop: 11, paddingTop: 10, borderTop: `1px solid ${HAIR}`, display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+          {people.slice(0, 6).map((p) => (
+            <button key={p.id} onClick={() => onOpen(p.id)} style={chipBtn(typeColor(p.type, types), true)} title={p.role}>
+              <span style={dot(typeColor(p.type, types))} /> {p.name}
+            </button>
+          ))}
+          {people.length > 6 && (
+            <span style={{ fontFamily: MONO, fontSize: 10.5, color: MUTE, alignSelf: 'center' }}>+{people.length - 6} more</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Badge({ color, label, strong }) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 6, background: `${color}${strong ? '22' : '14'}`, border: `1px solid ${color}${strong ? '66' : '44'}`, color, fontFamily: MONO, fontSize: 9.5, letterSpacing: '.06em', textTransform: 'uppercase', fontWeight: strong ? 700 : 400 }}>
+      {label}
+    </span>
   );
 }
 

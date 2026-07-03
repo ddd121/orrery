@@ -50,3 +50,6 @@ Thumbs.db
 # ── Test / verification artifacts ─
 .playwright-mcp/
 /orrery-*.png
+
+# local preview config (Claude preview tool)
+.claude/launch.json

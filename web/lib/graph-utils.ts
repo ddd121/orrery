@@ -217,9 +217,19 @@ export type MoneyLead = {
   /** best-effort: people/companies that sit behind the donor (its directors / owners). */
   behind: { node: GraphNode; rel: string }[];
 };
+/** A company/organisation where several people converge, and/or that is both a
+ *  political donor and a public-contract holder — the cross-register standouts. */
+export type ConcentrationLead = {
+  node: GraphNode;
+  people: GraphNode[];
+  isDonor: boolean;
+  isContractor: boolean;
+};
 export type Leads = {
   conflicts: ConflictLead[];
   money: MoneyLead[];
+  concentrations: ConcentrationLead[];
+  registers: string[];
 };
 
 const STRENGTH_RANK: Record<string, number> = { strong: 0, medium: 1, low: 2 };
@@ -230,6 +240,8 @@ const STRENGTH_RANK: Record<string, number> = { strong: 0, medium: 1, low: 2 };
 const BEHIND_REL = ["director", "own", "shareholder", "significant control", "psc", "secretary"];
 /* relationship labels that denote a political donation. */
 const DONATION_REL = ["donat", "donor"];
+/* relationship labels that denote a public-sector contract award. */
+const CONTRACT_REL = ["contract"];
 
 function relMatches(rel: string, needles: string[]): boolean {
   const r = rel.toLowerCase();
@@ -311,5 +323,50 @@ export function leads(
     };
   });
 
-  return { conflicts, money };
+  /* (c) where interests converge — a company/org tied to several people, and/or
+     that is BOTH a political donor and a public-contract holder (the Ecotricity
+     shape). Computed from the graph, sourced, framed as "worth a look". */
+  const orgIds = new Set(
+    nodes.filter((n) => n.type === "company" || n.type === "organisation").map((n) => n.id),
+  );
+  type Agg = { people: Set<string>; isDonor: boolean; isContractor: boolean };
+  const agg: Record<string, Agg> = {};
+  const bump = (id: string): Agg => (agg[id] ||= { people: new Set(), isDonor: false, isContractor: false });
+  for (const l of links) {
+    const a = idOf(l.source), b = idOf(l.target);
+    // a person converging on an org (either direction)
+    if (orgIds.has(a) && byId[b]?.type === "person") bump(a).people.add(b);
+    if (orgIds.has(b) && byId[a]?.type === "person") bump(b).people.add(a);
+    // the org itself donates
+    if (relMatches(l.rel, DONATION_REL) && orgIds.has(a)) bump(a).isDonor = true;
+    // the org holds a public contract (either endpoint may be the supplier)
+    if (relMatches(l.rel, CONTRACT_REL)) {
+      if (orgIds.has(a)) bump(a).isContractor = true;
+      if (orgIds.has(b)) bump(b).isContractor = true;
+    }
+  }
+  const concentrations: ConcentrationLead[] = Object.entries(agg)
+    .map(([id, v]) => ({
+      node: byId[id],
+      people: [...v.people].map((pid) => byId[pid]).filter(Boolean),
+      isDonor: v.isDonor,
+      isContractor: v.isContractor,
+    }))
+    .filter((c) => c.node && ((c.isDonor && c.isContractor) || c.people.length >= 3))
+    // donor+contractor loops first, then by how many people converge
+    .sort(
+      (a, b) =>
+        Number(b.isDonor && b.isContractor) - Number(a.isDonor && a.isContractor) ||
+        b.people.length - a.people.length ||
+        a.node.name.localeCompare(b.node.name),
+    );
+
+  /* distinct registers actually present in the graph (from each edge's source label) */
+  const regSet = new Set<string>();
+  for (const l of links) {
+    if (l.method) for (const part of l.method.split(" + ")) regSet.add(part.trim());
+  }
+  const registers = [...regSet].filter(Boolean).sort();
+
+  return { conflicts, money, concentrations, registers };
 }
