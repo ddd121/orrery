@@ -32,6 +32,26 @@ const SOURCE_LABEL: Record<string, string> = {
   electoral_commission: "Electoral Commission",
   parliament: "Parliament (Members API)",
   parliament_interests: "Register of Members' Interests",
+  contracts_finder: "Contracts Finder",
+};
+
+/**
+ * Register a statement most likely came from, keyed by statement_type. Only a *fallback*:
+ * the pipeline stamps `attributes.sources` on every edge (edges_v2.sql), so this rarely
+ * fires — but when it does it must be honest. Never default a non-company edge to
+ * "Companies House"; misattributing provenance is a credibility failure.
+ */
+const TYPE_REGISTER: Record<string, string> = {
+  DONATED_TO: "Electoral Commission",
+  CONTRACTED_WITH: "Contracts Finder",
+  DIRECTOR_OF: "Companies House",
+  PSC_OF: "Companies House",
+  OWNS: "Companies House",
+  CO_DIRECTOR: "Companies House",
+  ADVISER_TO: "Register of Members' Interests",
+  MEMBER_OF: "Parliament",
+  CHAIR_OF: "Parliament",
+  MINISTERIAL_ROLE: "Parliament",
 };
 
 /**
@@ -82,9 +102,7 @@ export async function loadGraph(): Promise<{
     method:
       Array.isArray(s.attributes?.sources) && s.attributes.sources.length
         ? s.attributes.sources.map((c: string) => SOURCE_LABEL[c] ?? c).join(" + ")
-        : s.statement_type === "DONATED_TO"
-          ? "Electoral Commission record"
-          : "Companies House record",
+        : TYPE_REGISTER[s.statement_type] ?? "official register",
     amount: s.attributes?.amount_gbp != null ? gbp(s.attributes.amount_gbp) : undefined,
   }));
 
