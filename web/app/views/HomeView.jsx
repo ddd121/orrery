@@ -1,136 +1,92 @@
 'use client';
 
 /**
- * Home — the findings-first, search-led landing.
+ * Home: the Deal (DESIGN_SPEC_V2 "Step 2: Home = the Deal").
  *
- * No hairball: a hero search, a board of computed leads (conflicts of interest +
- * the money behind the parties), a quiet credibility strip, and a cheap drifting
- * graph backdrop behind the hero. Everything is sourced and clicks through to a
- * dossier. The line we hold: facts, not verdicts — conflicts read "merits a look".
+ * Left: The Register masthead, search, "Find your MP", START WITH chips. Right:
+ * THE DEAL, a hero finding rendered as a mini orrery + headline + stamps, three
+ * smaller text-only cards, "Deal another". Below: the credibility strip and a
+ * From The Ledger teaser (top 6 by surprise). The three-column conflicts/money
+ * board (`leads()`) moves to the Findings page later; its components are kept
+ * below, unused, so that move is a clean cut rather than a rewrite.
+ *
+ * The line we hold: facts, not verdicts. Every headline is a plain-English fact
+ * built from a finding's sourced `slots` (see `lib/deal.js`), never an allegation.
  */
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { MagnifyingGlass, ArrowRight, WarningDiamond, CurrencyGbp, UsersThree, Path, SealCheck, Buildings } from '@phosphor-icons/react';
+import { MagnifyingGlass, ArrowsClockwise, SealCheck, IdentificationBadge } from '@phosphor-icons/react';
 import {
-  GOLD, VERM, TEXT, MUTE, HAIR, PANEL, MONO,
-  typeColor, typeIcon, leads,
+  BRASS, TEXT_1, TEXT_2, TEXT_3, HAIRLINE, INK_1, INK_2, RADIUS, TYPO,
+  typeColor, typeIcon, confTier,
 } from '@/lib/graph-utils';
-import ForceGraph from '../components/ForceGraph';
+import { getOrCreateVisitorId, todayISODate, dealHand, headlineFor, shapeLabel, pivotEntityId } from '@/lib/deal';
+import MiniOrrery from '../components/MiniOrrery';
 
-/* pick a representative, well-connected subset for the decorative backdrop */
-function backdropSubset(nodes, links, leadData, cap = 80) {
-  const degree = {};
-  for (const l of links) {
-    const s = typeof l.source === 'object' ? l.source.id : l.source;
-    const t = typeof l.target === 'object' ? l.target.id : l.target;
-    degree[s] = (degree[s] || 0) + 1;
-    degree[t] = (degree[t] || 0) + 1;
-  }
-  const keep = new Set();
-  // seed with the leads so the backdrop quietly mirrors the board
-  leadData.conflicts.slice(0, 12).forEach((c) => keep.add(c.node.id));
-  leadData.money.slice(0, 8).forEach((m) => { keep.add(m.donor.id); keep.add(m.party.id); });
-  // fill out with the most-connected nodes
-  [...nodes]
-    .sort((a, b) => (degree[b.id] || 0) - (degree[a.id] || 0))
-    .forEach((n) => { if (keep.size < cap) keep.add(n.id); });
+/* real entities the START WITH chips resolve against; hidden if absent from this dataset */
+const START_WITH_NAMES = ['Ecotricity Group Limited', 'IPGL Limited', 'GB News', 'Dale Vince'];
+const CONNECT_CHIP = { a: 'Dale Vince', b: 'Labour' };
 
-  const subNodes = nodes.filter((n) => keep.has(n.id));
-  const subLinks = links.filter((l) => {
-    const s = typeof l.source === 'object' ? l.source.id : l.source;
-    const t = typeof l.target === 'object' ? l.target.id : l.target;
-    return keep.has(s) && keep.has(t);
-  });
-  return { subNodes, subLinks };
-}
-
-export default function HomeView({ nodes, links, types, onOpenEntity, onExplore, onConnect }) {
-  const leadData = useMemo(() => leads(nodes, links), [nodes, links]);
-  const { subNodes, subLinks } = useMemo(
-    () => backdropSubset(nodes, links, leadData),
-    [nodes, links, leadData],
-  );
-  const conflictCount = leadData.conflicts.length;
+export default function HomeView({ nodes, links, types, findings = [], pairs = [], onOpenEntity, onExplore, onConnect }) {
+  const nodesById = useMemo(() => {
+    const m = {};
+    nodes.forEach((n) => (m[n.id] = n));
+    return m;
+  }, [nodes]);
+  const registerCount = useMemo(() => {
+    const regSet = new Set();
+    for (const l of links) if (l.method) for (const part of l.method.split(' + ')) regSet.add(part.trim());
+    return regSet.size || 6;
+  }, [links]);
 
   return (
     <div>
-      {/* ---------------------------------- HERO ---------------------------------- */}
-      <section style={{ position: 'relative', overflow: 'hidden', borderBottom: `1px solid ${HAIR}` }}>
-        <ForceGraph nodes={subNodes} links={subLinks} types={types} variant="backdrop" height={520} />
-        {/* legibility scrim over the backdrop */}
-        <div style={{ position: 'absolute', inset: 0, zIndex: 1, background: 'linear-gradient(180deg, rgba(7,10,22,0.35) 0%, rgba(7,10,22,0.55) 60%, rgba(7,10,22,0.85) 100%)', pointerEvents: 'none' }} />
-        <div style={{ position: 'relative', zIndex: 2, maxWidth: 880, margin: '0 auto', padding: '64px 20px 52px', textAlign: 'center' }}>
-          <h1 style={{ fontSize: 'clamp(26px, 5vw, 40px)', fontWeight: 800, lineHeight: 1.12, margin: '0 0 14px', letterSpacing: '-0.01em' }}>
-            The money and companies<br />around UK politics — <span style={{ color: GOLD }}>sourced</span>.
+      <div className="home-grid">
+        {/* ------------------------------- LEFT: MASTHEAD ------------------------------- */}
+        <section className="home-masthead">
+          <Eyebrow>A public-record map of UK political influence</Eyebrow>
+          <h1 style={{ ...TYPO.display, color: TEXT_1, margin: '10px 0 14px' }}>
+            Who funds whom in British politics, with receipts.
           </h1>
-          <p style={{ fontSize: 'clamp(14px, 2.4vw, 16px)', color: '#C7CEDF', lineHeight: 1.6, maxWidth: 620, margin: '0 auto 26px' }}>
-            Search a public figure, company or party to see who funds them, who sits where, and how they connect — every link drawn from a public register, with an honest confidence.
+          <p style={{ ...TYPO.body, color: TEXT_2, maxWidth: 480, margin: '0 0 24px' }}>
+            Every connection between public figures, companies and political money is drawn from a
+            public register, and carries its source and an honest confidence score.
           </p>
-          <HeroSearch nodes={nodes} types={types} onOpenEntity={onOpenEntity} onConnect={onConnect} />
-        </div>
-      </section>
 
-      {/* ------------------------------ CREDIBILITY STRIP ------------------------------ */}
-      <CredibilityStrip total={nodes.length} conflictCount={conflictCount} registerCount={leadData.registers.length} />
+          <HeroSearch nodes={nodes} types={types} onOpenEntity={onOpenEntity} />
+          <MPFinder nodes={nodes} onOpenEntity={onOpenEntity} />
+          <StartWithChips nodes={nodes} types={types} onOpenEntity={onOpenEntity} onConnect={onConnect} />
+        </section>
 
-      {/* -------------------------------- FINDINGS BOARD -------------------------------- */}
-      <section style={{ maxWidth: 1080, margin: '0 auto', padding: '8px 16px 64px' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, margin: '28px 2px 4px', flexWrap: 'wrap' }}>
-          <div>
-            <h2 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>What merits a look</h2>
-            <p style={{ fontSize: 13, color: MUTE, margin: '5px 0 0' }}>Computed from the registers — overlaps and the largest political money. Facts, not verdicts.</p>
-          </div>
-          <button
-            onClick={onExplore}
-            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 13px', borderRadius: 9, background: 'rgba(255,255,255,0.05)', border: `1px solid ${HAIR}`, color: MUTE, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
-          >
-            Explore the full network <ArrowRight size={15} />
-          </button>
-        </div>
+        {/* ---------------------------------- RIGHT: THE DEAL ---------------------------------- */}
+        <section className="home-deal">
+          <TheDeal nodes={nodes} nodesById={nodesById} findings={findings} onOpenEntity={onOpenEntity} />
+        </section>
+      </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20, marginTop: 18, alignItems: 'start' }}>
-          {/* conflicts of interest */}
-          <BoardColumn
-            icon={<WarningDiamond size={16} color={VERM} />}
-            title="Conflicts of interest"
-            sub={`${conflictCount} flagged · strong signals first`}
-          >
-            {leadData.conflicts.length === 0 && <EmptyNote>No conflict-shaped overlaps in this dataset yet.</EmptyNote>}
-            {leadData.conflicts.slice(0, 8).map((c) => (
-              <ConflictCard key={c.node.id} lead={c} types={types} onOpen={() => onOpenEntity(c.node.id)} />
-            ))}
-          </BoardColumn>
+      <CredibilityStrip total={nodes.length} registerCount={registerCount} findingCount={findings.length} />
+      <FromTheLedger findings={findings} nodesById={nodesById} onOpenEntity={onOpenEntity} />
 
-          {/* where interests converge — cross-register standouts */}
-          <BoardColumn
-            icon={<Buildings size={16} color="#6FC3B8" />}
-            title="Where interests converge"
-            sub="Companies several figures share · donor-and-contractor loops"
-          >
-            {leadData.concentrations.length === 0 && <EmptyNote>No cross-register concentrations in this dataset yet.</EmptyNote>}
-            {leadData.concentrations.slice(0, 8).map((c) => (
-              <ConcentrationCard key={c.node.id} lead={c} types={types} onOpen={onOpenEntity} />
-            ))}
-          </BoardColumn>
-
-          {/* the money behind the parties */}
-          <BoardColumn
-            icon={<CurrencyGbp size={16} color={GOLD} />}
-            title="The money behind the parties"
-            sub="Largest donations on record"
-          >
-            {leadData.money.length === 0 && <EmptyNote>No donations resolved in this dataset yet.</EmptyNote>}
-            {leadData.money.map((m, i) => (
-              <MoneyCard key={`${m.donor.id}-${m.party.id}-${i}`} lead={m} types={types} onOpen={onOpenEntity} />
-            ))}
-          </BoardColumn>
-        </div>
-      </section>
+      <style>{`
+        .home-grid {
+          display: grid; grid-template-columns: 1.1fr 1fr; gap: 40px;
+          max-width: 1160px; margin: 0 auto; padding: 56px 20px 40px; align-items: start;
+        }
+        .home-masthead { padding-top: 8px; }
+        @media (max-width: 860px) {
+          .home-grid { grid-template-columns: 1fr; padding: 32px 16px 24px; gap: 32px; }
+          .home-masthead { padding-top: 0; }
+        }
+      `}</style>
     </div>
   );
 }
 
+function Eyebrow({ children }) {
+  return <div style={{ ...TYPO.eyebrow, color: BRASS }}>{children}</div>;
+}
+
 /* ------------------------------- hero search ------------------------------- */
-function HeroSearch({ nodes, types, onOpenEntity, onConnect }) {
+function HeroSearch({ nodes, types, onOpenEntity }) {
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
   const boxRef = useRef(null);
@@ -155,87 +111,341 @@ function HeroSearch({ nodes, types, onOpenEntity, onConnect }) {
   }, []);
 
   return (
-    <div style={{ maxWidth: 560, margin: '0 auto' }}>
-      <div ref={boxRef} style={{ position: 'relative' }}>
-        <MagnifyingGlass size={18} color={MUTE} style={{ position: 'absolute', left: 16, top: 16 }} />
-        <input
-          value={q}
-          onChange={(e) => { setQ(e.target.value); setOpen(true); }}
-          onFocus={() => setOpen(true)}
-          placeholder="Search a person, company or party…"
-          aria-label="Search a person, company or party"
-          style={{
-            width: '100%', height: 52, padding: '0 18px 0 44px', borderRadius: 13, color: TEXT, fontSize: 16,
-            background: 'rgba(13,18,34,0.85)', border: `1px solid rgba(232,182,90,0.35)`, outline: 'none',
-            boxShadow: '0 12px 40px rgba(0,0,0,0.45)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
-          }}
-        />
-        {open && results.length > 0 && (
-          <div
-            className="sc in"
-            style={{ position: 'absolute', top: 58, left: 0, right: 0, zIndex: 30, maxHeight: 330, overflowY: 'auto', borderRadius: 13, background: PANEL, border: `1px solid ${HAIR}`, boxShadow: '0 18px 55px rgba(0,0,0,0.55)', padding: 6, textAlign: 'left' }}
-          >
-            {results.map((n) => (
-              <div
-                key={n.id}
-                onClick={() => { onOpenEntity(n.id); setQ(''); setOpen(false); }}
-                title={n.role}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 10, cursor: 'pointer' }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(232,182,90,0.12)')}
-                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-              >
-                <span style={{ width: 10, height: 10, borderRadius: '50%', flex: '0 0 auto', background: typeColor(n.type, types) }} />
-                <span style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ display: 'block', fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.name}</span>
-                  <span style={{ display: 'block', fontSize: 11, color: MUTE, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.role}</span>
-                </span>
-                {n.conflict && <span style={{ fontFamily: MONO, fontSize: 9, color: VERM, flex: '0 0 auto', opacity: n.conflictStrength === 'low' ? 0.5 : 1 }}>merits a look</span>}
-              </div>
-            ))}
-          </div>
-        )}
-        {open && q.trim() && results.length === 0 && (
-          <div style={{ position: 'absolute', top: 58, left: 0, right: 0, zIndex: 30, borderRadius: 13, background: PANEL, border: `1px solid ${HAIR}`, padding: '15px 14px', fontSize: 13, color: MUTE, textAlign: 'left' }}>
-            No match. Try a surname, a company, or a party.
-          </div>
-        )}
-      </div>
-
-      {/* Milestone 4 — the A→B connection finder */}
-      <button
-        type="button"
-        onClick={onConnect}
-        title="Find the connection between two names"
+    <div ref={boxRef} style={{ position: 'relative', maxWidth: 480 }}>
+      <MagnifyingGlass size={17} color={TEXT_2} style={{ position: 'absolute', left: 14, top: 14 }} />
+      <input
+        value={q}
+        onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        placeholder="Search a person, company or party"
+        aria-label="Search a person, company or party"
         style={{
-          marginTop: 13, display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 20,
-          background: 'rgba(232,182,90,0.08)', border: `1px solid rgba(232,182,90,0.35)`, color: GOLD, fontSize: 12.5, fontWeight: 600,
-          cursor: 'pointer',
+          width: '100%', height: 46, padding: '0 16px 0 40px', borderRadius: RADIUS.md, color: TEXT_1, fontSize: 15,
+          background: INK_1, border: `1px solid ${HAIRLINE}`, outline: 'none',
         }}
-        onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(232,182,90,0.16)')}
-        onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(232,182,90,0.08)')}
-      >
-        <Path size={14} /> Find the connection between two names
-      </button>
+      />
+      {open && results.length > 0 && (
+        <div
+          className="sc"
+          style={{ position: 'absolute', top: 52, left: 0, right: 0, zIndex: 30, maxHeight: 320, overflowY: 'auto', borderRadius: RADIUS.md, background: INK_2, border: `1px solid ${HAIRLINE}`, boxShadow: '0 18px 55px rgba(0,0,0,0.5)', padding: 5 }}
+        >
+          {results.map((n) => (
+            <div
+              key={n.id}
+              onClick={() => { onOpenEntity(n.id); setQ(''); setOpen(false); }}
+              title={n.role}
+              style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 10px', borderRadius: RADIUS.sm, cursor: 'pointer' }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(217,166,72,0.10)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            >
+              <span style={{ width: 9, height: 9, borderRadius: '50%', flex: '0 0 auto', background: typeColor(n.type, types) }} />
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 13.5, color: TEXT_1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.name}</span>
+                <span style={{ display: 'block', fontSize: 11, color: TEXT_2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.role}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {open && q.trim() && results.length === 0 && (
+        <div style={{ position: 'absolute', top: 52, left: 0, right: 0, zIndex: 30, borderRadius: RADIUS.md, background: INK_2, border: `1px solid ${HAIRLINE}`, padding: '14px', fontSize: 13, color: TEXT_2 }}>
+          No match. Try a surname, a company, or a party.
+        </div>
+      )}
     </div>
   );
 }
 
+/* ------------------------------- Find your MP ------------------------------- */
+/* MPs/ministers/peers are `entity_type = 'person'` with the parliamentary role carried
+   in `role` (loadGraph sets role = canonical_entities.category), not in `type`, so this
+   matches either, in case a future recompute starts setting entity_type directly. */
+const MP_TYPES = new Set(['mp', 'minister', 'peer']);
+
+function MPFinder({ nodes, onOpenEntity }) {
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(false);
+  const boxRef = useRef(null);
+
+  const mps = useMemo(
+    () => nodes.filter((n) => MP_TYPES.has(n.type) || MP_TYPES.has(n.role)),
+    [nodes],
+  );
+  const results = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    if (!s) return [];
+    return mps.filter((n) => n.name.toLowerCase().includes(s)).slice(0, 7);
+  }, [q, mps]);
+
+  useEffect(() => {
+    const onDoc = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  if (mps.length === 0) return null;
+
+  return (
+    <div ref={boxRef} style={{ position: 'relative', maxWidth: 480, marginTop: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <IdentificationBadge size={15} color={TEXT_2} style={{ flex: '0 0 auto' }} />
+        <input
+          value={q}
+          onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          placeholder="Find your MP"
+          aria-label="Find your MP"
+          style={{
+            flex: 1, height: 38, padding: '0 12px', borderRadius: RADIUS.sm, color: TEXT_1, fontSize: 13.5,
+            background: 'rgba(255,255,255,0.03)', border: `1px solid ${HAIRLINE}`, outline: 'none',
+          }}
+        />
+      </div>
+      {open && results.length > 0 && (
+        <div
+          className="sc"
+          style={{ position: 'absolute', top: 44, left: 23, right: 0, zIndex: 30, maxHeight: 280, overflowY: 'auto', borderRadius: RADIUS.md, background: INK_2, border: `1px solid ${HAIRLINE}`, boxShadow: '0 18px 55px rgba(0,0,0,0.5)', padding: 5 }}
+        >
+          {results.map((n) => (
+            <div
+              key={n.id}
+              onClick={() => { onOpenEntity(n.id); setQ(''); setOpen(false); }}
+              title={n.role}
+              style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 9px', borderRadius: RADIUS.sm, cursor: 'pointer' }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(217,166,72,0.10)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            >
+              <span style={{ width: 8, height: 8, borderRadius: '50%', flex: '0 0 auto', background: typeColor(n.type) }} />
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 13, color: TEXT_1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.name}</span>
+                <span style={{ display: 'block', fontSize: 10.5, color: TEXT_2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.role}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {open && q.trim() && results.length === 0 && (
+        <div style={{ position: 'absolute', top: 44, left: 23, right: 0, zIndex: 30, borderRadius: RADIUS.md, background: INK_2, border: `1px solid ${HAIRLINE}`, padding: '12px', fontSize: 12.5, color: TEXT_2 }}>
+          No match. Try a surname.
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------- START WITH chips ------------------------------- */
+function StartWithChips({ nodes, types, onOpenEntity, onConnect }) {
+  const byName = useMemo(() => {
+    const m = {};
+    nodes.forEach((n) => (m[n.name] = n));
+    return m;
+  }, [nodes]);
+
+  const chips = START_WITH_NAMES.map((name) => byName[name]).filter(Boolean);
+  const connectSubject = byName[CONNECT_CHIP.a];
+
+  if (chips.length === 0 && !connectSubject) return null;
+
+  return (
+    <div style={{ marginTop: 22 }}>
+      <div style={{ ...TYPO.dataLabel, marginBottom: 10 }}>START WITH</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {chips.map((n) => {
+          const Icon = typeIcon(n.type, types);
+          const col = typeColor(n.type, types);
+          return (
+            <button
+              key={n.id}
+              onClick={() => onOpenEntity(n.id)}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 12px', borderRadius: RADIUS.sm,
+                background: 'rgba(255,255,255,0.03)', border: `1px solid ${HAIRLINE}`, color: TEXT_1,
+                fontSize: 13, fontWeight: 500, cursor: 'pointer',
+              }}
+            >
+              <Icon size={14} color={col} /> {n.name}
+            </button>
+          );
+        })}
+        {connectSubject && (
+          <button
+            onClick={() => onConnect(connectSubject.id)}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 12px', borderRadius: RADIUS.sm,
+              background: 'rgba(217,166,72,0.08)', border: `1px solid rgba(217,166,72,0.35)`, color: BRASS,
+              fontSize: 13, fontWeight: 500, cursor: 'pointer',
+            }}
+          >
+            How is {CONNECT_CHIP.a} connected to {CONNECT_CHIP.b}?
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------- THE DEAL ---------------------------------- */
+function TheDeal({ nodes, nodesById, findings, onOpenEntity }) {
+  const [visitorId, setVisitorId] = useState(null);
+  const [drawCount, setDrawCount] = useState(0);
+  const [seen, setSeen] = useState(() => new Set());
+
+  useEffect(() => {
+    setVisitorId(getOrCreateVisitorId());
+  }, []);
+
+  const seedStr = visitorId ? `${visitorId}|${todayISODate()}|${drawCount}` : null;
+  const hand = useMemo(() => {
+    if (!seedStr || findings.length === 0) return [];
+    return dealHand(findings, seedStr, seen);
+  }, [seedStr, findings, seen]);
+
+  if (findings.length === 0) {
+    return (
+      <div style={{ padding: '18px 0' }}>
+        <div style={{ ...TYPO.dataLabel, marginBottom: 10 }}>YOUR DRAW</div>
+        <div style={{ ...TYPO.body, color: TEXT_2 }}>No findings computed yet.</div>
+      </div>
+    );
+  }
+  if (hand.length === 0) return null; // visitorId not yet resolved client-side
+
+  const dealAnother = () => {
+    setSeen((prev) => {
+      const next = new Set(prev);
+      hand.forEach((f) => next.add(f.id));
+      // if that would exhaust the pool, reset "seen" so the next hand isn't starved
+      return next.size >= findings.length ? new Set() : next;
+    });
+    setDrawCount((c) => c + 1);
+  };
+
+  const [hero, ...rest] = hand;
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div style={{ ...TYPO.dataLabel }}>YOUR DRAW</div>
+        <button
+          onClick={dealAnother}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 12px', borderRadius: RADIUS.sm,
+            background: 'rgba(217,166,72,0.08)', border: `1px solid rgba(217,166,72,0.35)`, color: BRASS,
+            fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+          }}
+        >
+          <ArrowsClockwise size={14} /> Deal another
+        </button>
+      </div>
+
+      <HeroFindingCard finding={hero} nodesById={nodesById} onOpen={() => openFinding(hero, nodesById, onOpenEntity)} />
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginTop: 12 }}>
+        {rest.map((f) => (
+          <SmallFindingCard key={f.id} finding={f} onOpen={() => openFinding(f, nodesById, onOpenEntity)} />
+        ))}
+      </div>
+
+      <p style={{ ...TYPO.caption, color: TEXT_3, marginTop: 14, marginBottom: 0 }}>
+        Dealt from {findings.length} findings computed from six public registers. Your draw. Press
+        Deal another for a fresh one.
+      </p>
+    </div>
+  );
+}
+
+function openFinding(finding, nodesById, onOpenEntity) {
+  // a dedicated finding page comes later, for now the card opens the pivotal member's dossier
+  const id = pivotEntityId(finding, nodesById);
+  if (id) onOpenEntity(id);
+}
+
+function HeroFindingCard({ finding, nodesById, onOpen }) {
+  const tier = confTier(finding.min_confidence);
+  const pct = Math.round(finding.min_confidence * 100);
+  const registerCount = registerCountOf(finding);
+  return (
+    <button
+      onClick={onOpen}
+      className="in"
+      style={{
+        display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer',
+        padding: 20, borderRadius: RADIUS.md, background: INK_1, border: `1px solid ${HAIRLINE}`, color: TEXT_1,
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(217,166,72,0.4)')}
+      onMouseLeave={(e) => (e.currentTarget.style.borderColor = HAIRLINE)}
+    >
+      <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ flex: '0 0 auto' }}>
+          <MiniOrrery finding={finding} nodesById={nodesById} size={220} showLabels />
+        </div>
+        <div style={{ flex: '1 1 220px', minWidth: 220 }}>
+          <p style={{ ...TYPO.title1, color: TEXT_1, margin: '0 0 14px' }}>{headlineFor(finding)}</p>
+          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+            <Stamp color={BRASS}>{shapeLabel(finding.shape_code)}</Stamp>
+            <Stamp color={tier.color}>{tier.label.toUpperCase()} &middot; {pct}%</Stamp>
+            <Stamp color={TEXT_2}>{registerCount} {registerCount === 1 ? 'REGISTER' : 'REGISTERS'}</Stamp>
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function SmallFindingCard({ finding, onOpen }) {
+  return (
+    <button
+      onClick={onOpen}
+      className="in"
+      style={{
+        display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer',
+        padding: 14, borderRadius: RADIUS.md, background: 'rgba(255,255,255,0.02)', border: `1px solid ${HAIRLINE}`, color: TEXT_1,
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(217,166,72,0.35)')}
+      onMouseLeave={(e) => (e.currentTarget.style.borderColor = HAIRLINE)}
+    >
+      <p style={{ ...TYPO.bodySm, color: TEXT_1, margin: '0 0 10px', lineHeight: 1.45 }}>{headlineFor(finding)}</p>
+      <Stamp color={BRASS} small>{shapeLabel(finding.shape_code)}</Stamp>
+    </button>
+  );
+}
+
+function Stamp({ color, children, small }) {
+  return (
+    <span
+      style={{
+        display: 'inline-flex', alignItems: 'center', padding: small ? '2px 6px' : '3px 8px', borderRadius: RADIUS.xs,
+        background: `${color}1A`, border: `1px solid ${color}55`, ...TYPO.dataLabel, color, letterSpacing: '.06em',
+        fontSize: small ? 9.5 : 10.5,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function registerCountOf(finding) {
+  const s = finding.slots || {};
+  if (typeof s.n_registers === 'number') return s.n_registers;
+  return 1;
+}
+
 /* ----------------------------- credibility strip ----------------------------- */
-function CredibilityStrip({ total, conflictCount, registerCount }) {
+function CredibilityStrip({ total, registerCount, findingCount }) {
   const items = [
     `${total.toLocaleString('en-GB')} entities`,
-    `${registerCount || 6} public registers`,
-    `${conflictCount} leads`,
-    'every link sourced',
+    `${registerCount} public registers`,
+    `${findingCount.toLocaleString('en-GB')} findings`,
+    'every link cites its source',
   ];
   return (
-    <div style={{ borderBottom: `1px solid ${HAIR}`, background: 'rgba(255,255,255,0.015)' }}>
-      <div style={{ maxWidth: 1080, margin: '0 auto', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
-        <SealCheck size={14} color={MUTE} style={{ flex: '0 0 auto' }} />
+    <div style={{ borderTop: `1px solid ${HAIRLINE}`, borderBottom: `1px solid ${HAIRLINE}`, background: 'rgba(255,255,255,0.015)' }}>
+      <div style={{ maxWidth: 1160, margin: '0 auto', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+        <SealCheck size={14} color={TEXT_2} style={{ flex: '0 0 auto' }} />
         {items.map((t, i) => (
           <React.Fragment key={t}>
-            {i > 0 && <span style={{ color: 'rgba(190,200,230,0.25)' }}>·</span>}
-            <span style={{ fontFamily: MONO, fontSize: 11.5, letterSpacing: '.04em', color: MUTE }}>{t}</span>
+            {i > 0 && <span style={{ color: 'rgba(154,167,199,0.25)' }}>&middot;</span>}
+            <span style={{ ...TYPO.dataLabel, color: TEXT_2 }}>{t}</span>
           </React.Fragment>
         ))}
       </div>
@@ -243,184 +453,41 @@ function CredibilityStrip({ total, conflictCount, registerCount }) {
   );
 }
 
-/* -------------------------------- board parts -------------------------------- */
-function BoardColumn({ icon, title, sub, children }) {
+/* ----------------------------- From The Ledger ----------------------------- */
+function FromTheLedger({ findings, nodesById, onOpenEntity }) {
+  const top6 = useMemo(() => findings.slice(0, 6), [findings]);
+  if (top6.length === 0) return null;
+
   return (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 4 }}>
-        {icon}
-        <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>{title}</h3>
+    <section style={{ maxWidth: 1160, margin: '0 auto', padding: '32px 20px 64px' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+        <h2 style={{ ...TYPO.title2, color: TEXT_1, margin: 0 }}>From the ledger</h2>
+        <span style={{ ...TYPO.caption, color: TEXT_3 }}>The full ledger is coming</span>
       </div>
-      <div className="eb" style={{ marginBottom: 12 }}>{sub}</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{children}</div>
-    </div>
-  );
-}
-
-function EmptyNote({ children }) {
-  return <div style={{ fontSize: 13, color: MUTE, fontStyle: 'italic', padding: '6px 2px' }}>{children}</div>;
-}
-
-function strengthMeta(strength) {
-  if (strength === 'strong') return { acc: VERM, label: 'Strong signal', op: 1 };
-  if (strength === 'low') return { acc: '#9AA0AD', label: 'Lower priority', op: 0.85 };
-  return { acc: VERM, label: 'Worth a look', op: 0.92 };
-}
-
-function ConflictCard({ lead, types, onOpen }) {
-  const { node, reason, overlap, strength } = lead;
-  const meta = strengthMeta(strength);
-  const low = strength === 'low';
-  const Icon = typeIcon(node.type, types);
-  const col = typeColor(node.type, types);
-  return (
-    <button
-      onClick={onOpen}
-      className="in"
-      style={{
-        textAlign: 'left', width: '100%', cursor: 'pointer', padding: '14px 15px', borderRadius: 13,
-        background: low ? 'rgba(154,160,173,0.06)' : 'rgba(229,101,75,0.07)',
-        border: `1px solid ${low ? 'rgba(154,160,173,0.30)' : 'rgba(229,101,75,0.38)'}`,
-        color: TEXT, display: 'block', opacity: meta.op,
-      }}
-      onMouseEnter={(e) => (e.currentTarget.style.borderColor = low ? 'rgba(154,160,173,0.55)' : 'rgba(229,101,75,0.7)')}
-      onMouseLeave={(e) => (e.currentTarget.style.borderColor = low ? 'rgba(154,160,173,0.30)' : 'rgba(229,101,75,0.38)')}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 9 }}>
-        <span style={{ width: 30, height: 30, borderRadius: 9, display: 'grid', placeItems: 'center', flex: '0 0 auto', background: `${col}22`, border: `1px solid ${col}55` }}>
-          <Icon size={16} color={col} />
-        </span>
-        <span style={{ flex: 1, minWidth: 0 }}>
-          <span style={{ display: 'block', fontSize: 14.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{node.name}</span>
-          <span style={{ display: 'block', fontSize: 11, color: MUTE, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{node.role}</span>
-        </span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 6, flex: '0 0 auto', background: low ? 'rgba(154,160,173,0.14)' : 'rgba(229,101,75,0.16)', border: `1px solid ${low ? 'rgba(154,160,173,0.4)' : 'rgba(229,101,75,0.5)'}`, color: low ? '#C7CBD3' : '#F0A593', fontFamily: MONO, fontSize: 9.5, letterSpacing: '.06em', textTransform: 'uppercase' }}>
-          <WarningDiamond size={10} /> merits a look
-        </span>
-      </div>
-      {reason && <div style={{ fontSize: 13, color: low ? '#C7CBD3' : '#E8C7BC', lineHeight: 1.5 }}>{reason}</div>}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontFamily: MONO, fontSize: 9.5, letterSpacing: '.08em', textTransform: 'uppercase', color: meta.acc, opacity: low ? 0.8 : 1 }}>{meta.label}</span>
-        {overlap && (
-          <>
-            <span style={{ color: 'rgba(190,200,230,0.25)' }}>·</span>
-            <span style={{ fontFamily: MONO, fontSize: 10.5, color: MUTE }}>{overlap} overlap</span>
-          </>
-        )}
-      </div>
-    </button>
-  );
-}
-
-function MoneyCard({ lead, types, onOpen }) {
-  const { donor, party, amountStr, behind } = lead;
-  const donorCol = typeColor(donor.type, types);
-  const partyCol = typeColor(party.type, types);
-  return (
-    <div
-      className="in"
-      style={{ padding: '14px 15px', borderRadius: 13, background: 'rgba(232,182,90,0.05)', border: `1px solid rgba(232,182,90,0.28)` }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <button onClick={() => onOpen(donor.id)} style={chipBtn(donorCol)}>
-          <span style={dot(donorCol)} /> {donor.name}
-        </button>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: MONO, fontSize: 13, fontWeight: 700, color: GOLD }}>
-          {amountStr ? amountStr : '—'} <ArrowRight size={13} color={MUTE} />
-        </span>
-        <button onClick={() => onOpen(party.id)} style={chipBtn(partyCol)}>
-          <span style={dot(partyCol)} /> {party.name}
-        </button>
-      </div>
-      <div style={{ fontFamily: MONO, fontSize: 9.5, letterSpacing: '.08em', textTransform: 'uppercase', color: MUTE, marginTop: 9 }}>
-        Donation on record · Electoral Commission
-      </div>
-      {behind.length > 0 && (
-        <div style={{ marginTop: 11, paddingTop: 10, borderTop: `1px solid ${HAIR}` }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 7 }}>
-            <UsersThree size={12} color={MUTE} />
-            <span style={{ fontFamily: MONO, fontSize: 9.5, letterSpacing: '.1em', textTransform: 'uppercase', color: MUTE }}>The people behind it</span>
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-            {behind.map((b) => (
-              <button key={b.node.id} onClick={() => onOpen(b.node.id)} style={chipBtn(typeColor(b.node.type, types), true)} title={`${b.rel} · ${b.node.role}`}>
-                <span style={dot(typeColor(b.node.type, types))} /> {b.node.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ConcentrationCard({ lead, types, onOpen }) {
-  const { node, people, isDonor, isContractor } = lead;
-  const col = typeColor(node.type, types);
-  const Icon = typeIcon(node.type, types);
-  const loop = isDonor && isContractor;
-  return (
-    <div
-      className="in"
-      style={{ padding: '14px 15px', borderRadius: 13, background: loop ? 'rgba(232,182,90,0.06)' : 'rgba(111,195,184,0.05)', border: `1px solid ${loop ? 'rgba(232,182,90,0.34)' : 'rgba(111,195,184,0.26)'}` }}
-    >
-      <button
-        onClick={() => onOpen(node.id)}
-        style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: TEXT }}
-      >
-        <span style={{ width: 30, height: 30, borderRadius: 9, display: 'grid', placeItems: 'center', flex: '0 0 auto', background: `${col}22`, border: `1px solid ${col}55` }}>
-          <Icon size={16} color={col} />
-        </span>
-        <span style={{ flex: 1, minWidth: 0 }}>
-          <span style={{ display: 'block', fontSize: 14.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{node.name}</span>
-          <span style={{ display: 'block', fontSize: 11, color: MUTE }}>{people.length} {people.length === 1 ? 'figure' : 'figures'} connected · {node.role}</span>
-        </span>
-      </button>
-
-      {(isDonor || isContractor) && (
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-          {loop ? (
-            <Badge color={GOLD} label="Donor + public contracts" strong />
-          ) : (
-            <>
-              {isDonor && <Badge color="#E08AAE" label="Political donor" />}
-              {isContractor && <Badge color="#6F9BD8" label="Public contracts" />}
-            </>
-          )}
-        </div>
-      )}
-
-      {people.length > 0 && (
-        <div style={{ marginTop: 11, paddingTop: 10, borderTop: `1px solid ${HAIR}`, display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-          {people.slice(0, 6).map((p) => (
-            <button key={p.id} onClick={() => onOpen(p.id)} style={chipBtn(typeColor(p.type, types), true)} title={p.role}>
-              <span style={dot(typeColor(p.type, types))} /> {p.name}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 1, borderRadius: RADIUS.md, overflow: 'hidden', border: `1px solid ${HAIRLINE}` }}>
+        {top6.map((f, i) => {
+          const tier = confTier(f.min_confidence);
+          const pct = Math.round(f.min_confidence * 100);
+          return (
+            <button
+              key={f.id}
+              onClick={() => openFinding(f, nodesById, onOpenEntity)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', cursor: 'pointer',
+                padding: '13px 16px', background: INK_1, border: 'none', borderBottom: i < top6.length - 1 ? `1px solid ${HAIRLINE}` : 'none',
+                color: TEXT_1,
+              }}
+            >
+              <span style={{ ...TYPO.dataValue, color: TEXT_3, width: 20, flex: '0 0 auto' }}>{i + 1}</span>
+              <Stamp color={BRASS} small>{shapeLabel(f.shape_code)}</Stamp>
+              <span style={{ ...TYPO.bodySm, color: TEXT_1, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {headlineFor(f)}
+              </span>
+              <Stamp color={tier.color} small>{tier.label.toUpperCase()} &middot; {pct}%</Stamp>
             </button>
-          ))}
-          {people.length > 6 && (
-            <span style={{ fontFamily: MONO, fontSize: 10.5, color: MUTE, alignSelf: 'center' }}>+{people.length - 6} more</span>
-          )}
-        </div>
-      )}
-    </div>
+          );
+        })}
+      </div>
+    </section>
   );
-}
-
-function Badge({ color, label, strong }) {
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 6, background: `${color}${strong ? '22' : '14'}`, border: `1px solid ${color}${strong ? '66' : '44'}`, color, fontFamily: MONO, fontSize: 9.5, letterSpacing: '.06em', textTransform: 'uppercase', fontWeight: strong ? 700 : 400 }}>
-      {label}
-    </span>
-  );
-}
-
-function chipBtn(color, small) {
-  return {
-    display: 'inline-flex', alignItems: 'center', gap: 6, padding: small ? '4px 9px' : '5px 10px', borderRadius: 8,
-    background: `${color}14`, border: `1px solid ${color}44`, color: TEXT, cursor: 'pointer',
-    fontSize: small ? 12 : 13, fontWeight: 600, maxWidth: '100%',
-  };
-}
-function dot(color) {
-  return { width: 8, height: 8, borderRadius: '50%', background: color, flex: '0 0 auto', display: 'inline-block' };
 }

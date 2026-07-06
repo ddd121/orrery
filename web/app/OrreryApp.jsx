@@ -38,8 +38,10 @@ function rankNodes(nodes) {
   );
 }
 
-export default function OrreryApp({ nodes, links, types }) {
+export default function OrreryApp({ nodes, links, types, findings, pairs }) {
   const [view, setView] = useState('home');
+  const findingsSafe = findings || [];
+  const pairsSafe = pairs || [];
   const [entityId, setEntityId] = useState(null);
   const [exploreFocus, setExploreFocus] = useState(null);
   const [connectFrom, setConnectFrom] = useState(null);
@@ -170,6 +172,8 @@ export default function OrreryApp({ nodes, links, types }) {
             nodes={nodes}
             links={links}
             types={types}
+            findings={findingsSafe}
+            pairs={pairsSafe}
             onOpenEntity={openEntity}
             onExplore={() => openExplore(null)}
             onConnect={() => goConnect(null)}

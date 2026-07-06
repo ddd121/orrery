@@ -151,3 +151,74 @@ export async function loadGraph(): Promise<{
 
   return { nodes, links, types };
 }
+
+/** A materialised, sourced structural pattern (DESIGN_SPEC_V2 "Step 1: the findings pool"). */
+export type Finding = {
+  id: string;
+  shape_code: string;
+  member_entity_ids: string[];
+  member_statement_ids: string[];
+  slots: Record<string, any>;
+  surprise: number;
+  min_confidence: number;
+};
+
+/** A cross-register endpoint pair worth tracing in Connect (`public.suggested_pairs`). */
+export type SuggestedPair = {
+  id: string;
+  from_entity_id: string;
+  to_entity_id: string;
+  why: string;
+};
+
+/**
+ * Reads `public.findings` (excluding QUIET_PORTFOLIO, unsafe framing for now) ordered by
+ * surprise desc, and `public.suggested_pairs`, both via the anon key + RLS. Paginated
+ * defensively like `loadGraph`, though at ~494 rows a single fetch would already suffice.
+ */
+export async function loadFindings(): Promise<{ findings: Finding[]; pairs: SuggestedPair[] }> {
+  const fetchAll = async (table: string, columns: string, order?: string): Promise<any[]> => {
+    const out: any[] = [];
+    const size = 1000;
+    for (let from = 0; ; from += size) {
+      let q = supabase.from(table).select(columns).range(from, from + size - 1);
+      if (order) q = q.order(order, { ascending: false });
+      const { data, error } = await q;
+      if (error) throw error;
+      out.push(...(data ?? []));
+      if (!data || data.length < size) break;
+    }
+    return out;
+  };
+
+  const [findingRows, pairRows] = await Promise.all([
+    fetchAll(
+      "findings",
+      "id, shape_code, member_entity_ids, member_statement_ids, slots, surprise, min_confidence",
+      "surprise",
+    ),
+    fetchAll("suggested_pairs", "id, from_entity_id, to_entity_id, why"),
+  ]);
+
+  const findings: Finding[] = findingRows
+    .filter((f: any) => f.shape_code !== "QUIET_PORTFOLIO")
+    .map((f: any) => ({
+      id: f.id,
+      shape_code: f.shape_code,
+      member_entity_ids: f.member_entity_ids ?? [],
+      member_statement_ids: f.member_statement_ids ?? [],
+      slots: f.slots ?? {},
+      surprise: Number(f.surprise ?? 0),
+      min_confidence: Number(f.min_confidence ?? 0),
+    }))
+    .sort((a, b) => b.surprise - a.surprise);
+
+  const pairs: SuggestedPair[] = pairRows.map((p: any) => ({
+    id: p.id,
+    from_entity_id: p.from_entity_id,
+    to_entity_id: p.to_entity_id,
+    why: p.why,
+  }));
+
+  return { findings, pairs };
+}
