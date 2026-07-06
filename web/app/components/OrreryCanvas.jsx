@@ -1,19 +1,26 @@
 'use client';
 
 /**
- * The Explore full-network canvas — react-force-graph-2d (canvas/WebGL-ish 2d),
- * the M5 swap for the hand-rolled SVG. The library owns the d3-force simulation,
- * pan and zoom; we only describe how to *paint* each node and edge so the look is
- * pixel-for-pixel the same tool as Home / Dossier / Connect (same tokens, conflict
- * ring, scrutiny halo, dotted-weak edges, gold trace path).
+ * The Explore canvas — react-force-graph-2d (canvas/WebGL-ish 2d). The library owns
+ * the d3-force simulation, pan and zoom; we only describe how to *paint* each node and
+ * edge so the look is pixel-for-pixel the same tool as Home / Dossier / Connect (same
+ * tokens, conflict ring, scrutiny halo, dotted-weak edges, gold trace path, a faint
+ * brass ring on finding members).
  *
  * react-force-graph touches `window`, so OrreryGraph imports this via next/dynamic
  * with { ssr: false }. Everything stateful (selection, threshold, filters, trace)
  * lives up in OrreryGraph and arrives here as props; this component is the renderer.
  *
- * Performance: at ~2,000 nodes a per-tick React re-render of ~5k SVG elements pinned
- * the CPU (the "fan"). Here the simulation runs on the canvas with a bounded cooldown
- * and then idles (autoPauseRedraw) — no React work per frame.
+ * Performance (DESIGN_SPEC_V2 "Step 5"): OrreryGraph already caps the data at <=300
+ * nodes / <=900 edges (the constellation/focus subgraph), so this never lays out the
+ * full network. On top of that:
+ *   - a bounded warmup (headless ticks) then a HARD freeze: cooldownTicks is finite
+ *     and onEngineStop stops the simulation for good — no perpetual redraw loop.
+ *   - the settled layout (x/y per node) is cached in sessionStorage keyed by a hash of
+ *     the node-set (`layoutKey`, computed by OrreryGraph via hashIdSet) so returning to
+ *     the same constellation/focus is instant and never re-simulates.
+ *   - labels only draw when zoomed in (k > 1.4), or the node is well-connected
+ *     (degree >= 8), or it's a finding member — otherwise label-on-hover only.
  */
 import React, { useRef, useEffect, useMemo, useState, useImperativeHandle, forwardRef } from 'react';
 import dynamic from 'next/dynamic';
@@ -32,7 +39,7 @@ const HALO_BG = 'rgba(7,10,22,0.92)'; // label outline / readability stroke, mat
  * to only show labels once they'd be legible (or when the node is selected/searched).
  */
 function paintNode(node, ctx, globalScale, ui) {
-  const { selectedId, traceSet, neighbours, focusId, isOn, matchesId } = ui;
+  const { selectedId, traceSet, neighbours, focusId, isOn, matchesId, hoveredId, degreeById } = ui;
   const on = isOn(node.type);
   const r = radius(node);
   const c = typeColor(node.type, ui.types);
@@ -42,6 +49,8 @@ function paintNode(node, ctx, globalScale, ui) {
   const inTrace = traceSet.has(node.id);
   const isNb = neighbours.has(node.id);
   const matched = matchesId(node.id);
+  const isHovered = hoveredId === node.id;
+  const degree = degreeById?.[node.id] ?? 0;
 
   // dim rule mirrors the SVG: a focus/search context fades everything not in it
   const dim = on && ((focusId && !isSel && !isNb && !inTrace) || (ui.hasSearch && !matched && !inTrace));
@@ -66,6 +75,18 @@ function paintNode(node, ctx, globalScale, ui) {
     ctx.setLineDash([2, 3]);
     ctx.stroke();
     ctx.setLineDash([]);
+    ctx.globalAlpha = alpha;
+  }
+
+  // faint brass ring — this entity is a member of a finding (DESIGN_SPEC_V2 "Step 5":
+  // the constellation should read as visibly organised around what merits attention).
+  if (node.isFindingMember && !node.conflict) {
+    ctx.beginPath();
+    ctx.arc(x, y, r + 5, 0, 2 * Math.PI);
+    ctx.strokeStyle = GOLD;
+    ctx.globalAlpha = alpha * 0.45;
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
     ctx.globalAlpha = alpha;
   }
 
@@ -110,10 +131,11 @@ function paintNode(node, ctx, globalScale, ui) {
   ctx.fill();
   ctx.globalAlpha = 1;
 
-  // label — only when it would be legible (zoomed in enough) OR the node is
-  // important / selected / traced / a search hit. Keeps the field readable at full extent.
-  const zoomedEnough = globalScale >= 1.6;
-  const showLabel = on && (isSel || inTrace || matched || (node.importance >= 6 && zoomedEnough) || (node.importance >= 8));
+  // label — DESIGN_SPEC_V2 "Step 5": only draw when zoomed in (k > 1.4), the node is
+  // well-connected (degree >= 8) or it's a finding member; otherwise hover-only.
+  // Selection / trace / search-match always earn a label regardless of zoom.
+  const zoomedEnough = globalScale > 1.4;
+  const showLabel = on && (isSel || inTrace || matched || isHovered || zoomedEnough || degree >= 8 || node.isFindingMember);
   if (showLabel && !dim) {
     const fontSize = (node.importance >= 8 ? 14 : 12) / globalScale;
     ctx.font = `${node.importance >= 7 ? 700 : 500} ${fontSize}px "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif`;
@@ -142,18 +164,69 @@ function paintNodePointer(node, color, ctx) {
   ctx.fill();
 }
 
+/** sessionStorage helpers for the per-node-set layout cache (DESIGN_SPEC_V2 "Step 5":
+ *  cache the computed layout keyed by a hash of the sorted included ids, and restore
+ *  it so returning to a view is instant and never re-simulates). */
+function loadCachedLayout(key) {
+  if (!key || typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function saveCachedLayout(key, nodes) {
+  if (!key || typeof window === 'undefined') return;
+  try {
+    const positions = {};
+    for (const n of nodes) if (n.x != null && n.y != null) positions[n.id] = [n.x, n.y];
+    window.sessionStorage.setItem(key, JSON.stringify(positions));
+  } catch { /* storage full / unavailable — layout just re-simulates, harmless */ }
+}
+
 const OrreryCanvas = forwardRef(function OrreryCanvas(
-  { graphData, types, ui, onNodeClick, onBackgroundClick, onEngineStop },
+  { graphData, types, ui, onNodeClick, onBackgroundClick, onEngineStop, layoutKey },
   ref,
 ) {
   const fgRef = useRef(null);
   const wrapRef = useRef(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
+  const [hoveredId, setHoveredId] = useState(null);
+  const frozenRef = useRef(false);
+
+  // node degree within the current (already-capped) graph data — drives the label
+  // gate (degree >= 8 earns an always-on label) independent of zoom.
+  const degreeById = useMemo(() => {
+    const d = {};
+    for (const l of graphData.links || []) {
+      const a = idOf(l.source), b = idOf(l.target);
+      d[a] = (d[a] ?? 0) + 1;
+      d[b] = (d[b] ?? 0) + 1;
+    }
+    return d;
+  }, [graphData]);
+
+  // restore a cached layout (if we've laid out this exact node-set before) BEFORE the
+  // library mounts, so it starts from settled positions instead of the centre.
+  const seededGraphData = useMemo(() => {
+    const cached = loadCachedLayout(layoutKey);
+    if (!cached) return graphData;
+    let hit = 0;
+    const nodes = graphData.nodes.map((n) => {
+      const pos = cached[n.id];
+      if (!pos) return n;
+      hit++;
+      return { ...n, x: pos[0], y: pos[1] };
+    });
+    // only trust the cache if it covers (almost) every node in this set
+    if (hit < nodes.length * 0.9) return graphData;
+    return { nodes, links: graphData.links };
+  }, [graphData, layoutKey]);
+  const hadCachedLayout = seededGraphData !== graphData;
 
   // keep the latest UI state in a ref so the canvas paint closures always read live
   // values without forcing the library to rebind accessors every render.
   const uiRef = useRef(ui);
-  uiRef.current = ui;
+  uiRef.current = { ...ui, hoveredId, degreeById };
 
   // size the canvas to its container
   useEffect(() => {
@@ -166,6 +239,21 @@ const OrreryCanvas = forwardRef(function OrreryCanvas(
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // a new node-set (constellation <-> focus, or a widened focus) needs a fresh warmup.
+  // Crucially, the underlying force-graph engine's animation frame loop does NOT
+  // restart itself just because `graphData` changed (pauseAnimation cancels the
+  // rAF loop outright, and there is no "resume on new data" wiring in the library) —
+  // so a hard freeze on the PREVIOUS node-set would otherwise permanently stall every
+  // node-set after it. Explicitly resume + reheat on every node-set change, then let
+  // the (possibly instant, if cached) settle re-freeze it via handleEngineStop.
+  useEffect(() => {
+    frozenRef.current = false;
+    const fg = fgRef.current;
+    if (!fg) return;
+    fg.resumeAnimation();
+    fg.d3ReheatSimulation();
+  }, [layoutKey]);
 
   // expose the imperative handles OrreryGraph drives (focus an entity, recenter)
   useImperativeHandle(ref, () => ({
@@ -181,6 +269,7 @@ const OrreryCanvas = forwardRef(function OrreryCanvas(
       fg.zoomToFit(ms, pad);
     },
     reheat() {
+      frozenRef.current = false;
       fgRef.current?.d3ReheatSimulation();
     },
     raw() {
@@ -188,9 +277,10 @@ const OrreryCanvas = forwardRef(function OrreryCanvas(
     },
   }), []);
 
-  // tune the force layout once the graph instance exists — spread the hairball out
-  // a little more than the library default so ~2k nodes don't clump.
+  // tune the force layout once the graph instance exists — spread the constellation
+  // out a little more than the library default so it doesn't clump.
   const onReady = (fg) => {
+    const firstMount = !fgRef.current;
     fgRef.current = fg;
     if (!fg) return;
     try {
@@ -199,7 +289,24 @@ const OrreryCanvas = forwardRef(function OrreryCanvas(
       if (lf) {
         lf.distance((l) => 36 + (1 - (l.strength || 0.5)) * 60).strength((l) => 0.12 + (l.strength || 0.5) * 0.25);
       }
+      // a cached, already-settled layout needs no further simulation at all — this
+      // only applies on first mount; later node-set swaps are handled by the
+      // layoutKey effect above (resumeAnimation) and handleEngineStop below.
+      if (firstMount && hadCachedLayout) {
+        fg.pauseAnimation();
+        frozenRef.current = true;
+      }
     } catch { /* force may not be ready on first paint; harmless */ }
+  };
+
+  const handleEngineStop = () => {
+    // HARD freeze: stop the simulation for good once it settles, and cache the
+    // resulting positions for this node-set so a return visit is instant.
+    if (frozenRef.current) return; // already frozen (e.g. a cached layout) — nothing to do
+    frozenRef.current = true;
+    fgRef.current?.pauseAnimation();
+    saveCachedLayout(layoutKey, graphData.nodes);
+    onEngineStop?.();
   };
 
   // ---- accessor callbacks. They read uiRef.current so they stay cheap + always current.
@@ -268,7 +375,7 @@ const OrreryCanvas = forwardRef(function OrreryCanvas(
     <div ref={wrapRef} style={{ position: 'absolute', inset: 0 }}>
       <ForceGraph2D
         ref={fgRef}
-        graphData={graphData}
+        graphData={seededGraphData}
         width={size.w}
         height={size.h}
         backgroundColor="rgba(0,0,0,0)"
@@ -278,6 +385,7 @@ const OrreryCanvas = forwardRef(function OrreryCanvas(
         nodeLabel={() => ''}
         nodeCanvasObject={nodeCanvasObject}
         nodePointerAreaPaint={nodePointerAreaPaint}
+        onNodeHover={(n) => setHoveredId(n ? n.id : null)}
         /* links — custom paint for the dotted-weak / gold-trace treatment */
         linkVisibility={linkVisibility}
         linkCanvasObject={linkCanvasObject}
@@ -285,14 +393,16 @@ const OrreryCanvas = forwardRef(function OrreryCanvas(
         onNodeClick={(n) => onNodeClick?.(n)}
         onBackgroundClick={() => onBackgroundClick?.()}
         enableNodeDrag
-        warmupTicks={20}
-        cooldownTicks={120}
-        cooldownTime={6000}
+        /* bounded warmup + a FINITE cooldown, then a hard stop (handleEngineStop) —
+           never a perpetual simulation, even on a fresh (uncached) node-set. */
+        warmupTicks={hadCachedLayout ? 0 : 60}
+        cooldownTicks={hadCachedLayout ? 0 : 90}
+        cooldownTime={4000}
         d3VelocityDecay={0.32}
         autoPauseRedraw
         minZoom={0.18}
         maxZoom={8}
-        onEngineStop={() => onEngineStop?.()}
+        onEngineStop={handleEngineStop}
       />
       <ForceReady fgRef={fgRef} onReady={onReady} />
     </div>

@@ -13,7 +13,7 @@
  * is code-split so it never weighs down the landing.
  */
 import React, { useMemo, useState, useRef, useEffect, lazy, Suspense } from 'react';
-import { MagnifyingGlass, X, Graph, ArrowLeft, BookOpenText, Path } from '@phosphor-icons/react';
+import { MagnifyingGlass, X, Graph, ArrowLeft, BookOpenText, Path, CaretRight } from '@phosphor-icons/react';
 import {
   GOLD, VERM, TEXT, MUTE, HAIR, PANEL, MONO, SANS, BG,
   typeColor,
@@ -118,43 +118,12 @@ export default function OrreryApp({ nodes, links, types, findings, pairs }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes]);
 
-  /* ---- Explore is the full-screen original graph; render it bare (it owns the
-     viewport, header and all) so we don't double up chrome. ---- */
-  if (view === 'explore') {
-    return (
-      <Suspense
-        fallback={
-          <div style={{ position: 'fixed', inset: 0, background: BG, color: MUTE, display: 'grid', placeItems: 'center', fontFamily: SANS }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-              <Spinner />
-              <span style={{ fontFamily: MONO, fontSize: 12, letterSpacing: '.12em' }}>LOADING THE FULL NETWORK…</span>
-            </div>
-          </div>
-        }
-      >
-        <div style={{ position: 'fixed', inset: 0 }}>
-          <OrreryGraph nodes={nodes} links={links} types={types} initialFocusId={exploreFocus} autoWelcome={false} />
-          <button
-            onClick={openHome}
-            style={{
-              position: 'fixed', left: 12, bottom: 12, zIndex: 60,
-              display: 'flex', alignItems: 'center', gap: 7, padding: '9px 14px', borderRadius: 20,
-              background: PANEL, border: `1px solid ${HAIR}`, color: GOLD, fontFamily: SANS, fontSize: 13, fontWeight: 700,
-              backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', cursor: 'pointer',
-            }}
-          >
-            <ArrowLeft size={15} /> Findings
-          </button>
-        </div>
-      </Suspense>
-    );
-  }
-
+  const isExplore = view === 'explore';
   return (
     <div
       style={{
-        minHeight: '100vh', color: TEXT, background: BG, fontFamily: SANS,
-        display: 'flex', flexDirection: 'column',
+        minHeight: '100vh', height: isExplore ? '100vh' : undefined, color: TEXT, background: BG, fontFamily: SANS,
+        display: 'flex', flexDirection: 'column', overflow: isExplore ? 'hidden' : undefined,
       }}
     >
       <GlobalStyle />
@@ -166,7 +135,32 @@ export default function OrreryApp({ nodes, links, types, findings, pairs }) {
         onExplore={() => openExplore(null)}
         onConnect={() => goConnect(null)}
       />
-      <main style={{ flex: 1, width: '100%' }}>
+      {isExplore && <Breadcrumb items={[{ label: 'Findings', onClick: openHome }, { label: 'Full network' }]} />}
+      <main style={{ flex: 1, width: '100%', display: isExplore ? 'flex' : 'block', minHeight: 0 }}>
+        {view === 'explore' && (
+          <Suspense
+            fallback={
+              <div style={{ flex: 1, background: BG, color: MUTE, display: 'grid', placeItems: 'center', fontFamily: SANS }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+                  <Spinner />
+                  <span style={{ fontFamily: MONO, fontSize: 12, letterSpacing: '.12em' }}>LOADING THE FULL NETWORK…</span>
+                </div>
+              </div>
+            }
+          >
+            <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
+              <OrreryGraph
+                nodes={nodes}
+                links={links}
+                types={types}
+                findings={findingsSafe}
+                initialFocusId={exploreFocus}
+                autoWelcome={false}
+                onOpenEntity={openEntity}
+              />
+            </div>
+          </Suspense>
+        )}
         {view === 'home' && (
           <HomeView
             nodes={nodes}
@@ -334,6 +328,40 @@ function Header({ ranked, types, onPick, onHome, onExplore, onConnect }) {
 
       {showHelp && <HelpSheet onClose={() => setShowHelp(false)} />}
     </header>
+  );
+}
+
+/* breadcrumb row under the header on non-Home views — everything clickable but the
+   current page. Keeps Explore feeling like part of the same site, not a separate one. */
+function Breadcrumb({ items }) {
+  return (
+    <div
+      style={{
+        flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px',
+        borderBottom: `1px solid ${HAIR}`, background: 'rgba(9,12,22,0.6)', fontFamily: MONO, fontSize: 11.5,
+      }}
+    >
+      {items.map((it, i) => {
+        const last = i === items.length - 1;
+        return (
+          <React.Fragment key={it.label}>
+            {i > 0 && <CaretRight size={10} color={MUTE} style={{ flex: '0 0 auto', opacity: 0.6 }} />}
+            {it.onClick && !last ? (
+              <button
+                onClick={it.onClick}
+                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: MUTE, fontFamily: MONO, fontSize: 11.5, letterSpacing: '.02em' }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = GOLD)}
+                onMouseLeave={(e) => (e.currentTarget.style.color = MUTE)}
+              >
+                {it.label}
+              </button>
+            ) : (
+              <span style={{ color: last ? TEXT : MUTE, letterSpacing: '.02em' }}>{it.label}</span>
+            )}
+          </React.Fragment>
+        );
+      })}
+    </div>
   );
 }
 

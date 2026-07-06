@@ -440,3 +440,151 @@ export function leads(
 
   return { conflicts, money, concentrations, registers };
 }
+
+/* ------------------------------ Explore: constellation + focus ------------------------------ */
+/**
+ * DESIGN_SPEC_V2 "Step 5: Explore = constellation". Explore must never dump the whole
+ * graph (thousands of nodes) into the force layout at once — that is the "hairball"
+ * the owner flagged as slow and unusable. Instead we compute a small, curated subgraph:
+ * a "constellation" by default (organised around what merits attention), or a "focus"
+ * neighbourhood once the visitor names or clicks an entity.
+ */
+export type Finding = { id: string; member_entity_ids: string[] };
+
+const CONSTELLATION_NODE_CAP = 300;
+const CONSTELLATION_EDGE_CAP = 900;
+const FOCUS_NODE_CAP = 150;
+
+/**
+ * The default Explore view: union of (a) every entity that belongs to a finding,
+ * (b) both endpoints of the top 25 statements by amount (donations), (c) the top 50
+ * nodes by degree — in that priority order, capped at 300. Edges are the finding-member
+ * edges plus any link between two included nodes at confidence >= 0.5, capped at 900.
+ * Finding members are flagged so the renderer can give them a faint brass ring.
+ */
+export function buildConstellation(
+  nodes: GraphNode[],
+  links: GraphLink[],
+  findings: Finding[],
+): { nodeIds: Set<string>; findingMemberIds: Set<string>; edges: GraphLink[] } {
+  const nodeById: Record<string, GraphNode> = {};
+  for (const n of nodes) nodeById[n.id] = n;
+
+  const findingMemberIds = new Set<string>();
+  for (const f of findings) for (const id of f.member_entity_ids || []) {
+    if (nodeById[id]) findingMemberIds.add(id);
+  }
+
+  const degree: Record<string, number> = {};
+  for (const l of links) {
+    const a = idOf(l.source), b = idOf(l.target);
+    if (nodeById[a]) degree[a] = (degree[a] ?? 0) + 1;
+    if (nodeById[b]) degree[b] = (degree[b] ?? 0) + 1;
+  }
+
+  const donationLinks = links
+    .filter((l) => relMatches(l.rel, DONATION_REL))
+    .map((l) => ({ l, value: amountValue(l) }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 25);
+
+  const topByDegree = [...nodes].sort((a, b) => (degree[b.id] ?? 0) - (degree[a.id] ?? 0)).slice(0, 50);
+
+  const nodeIds = new Set<string>();
+  // priority order: (a) finding members, (b) top-25-donation endpoints, (c) top-50 by degree
+  for (const id of findingMemberIds) { if (nodeIds.size >= CONSTELLATION_NODE_CAP) break; nodeIds.add(id); }
+  for (const { l } of donationLinks) {
+    if (nodeIds.size >= CONSTELLATION_NODE_CAP) break;
+    const a = idOf(l.source), b = idOf(l.target);
+    if (nodeById[a] && nodeIds.size < CONSTELLATION_NODE_CAP) nodeIds.add(a);
+    if (nodeById[b] && nodeIds.size < CONSTELLATION_NODE_CAP) nodeIds.add(b);
+  }
+  for (const n of topByDegree) { if (nodeIds.size >= CONSTELLATION_NODE_CAP) break; nodeIds.add(n.id); }
+
+  // edges = finding-member edges (both endpoints are finding members) + any link between two
+  // included nodes with confidence >= 0.5
+  const edgeKeys = new Set<string>();
+  const edges: GraphLink[] = [];
+  const pushEdge = (l: GraphLink) => {
+    const a = idOf(l.source), b = idOf(l.target);
+    const key = a < b ? `${a}|${b}` : `${b}|${a}`;
+    if (edgeKeys.has(key)) return;
+    edgeKeys.add(key);
+    edges.push(l);
+  };
+  for (const l of links) {
+    if (edges.length >= CONSTELLATION_EDGE_CAP) break;
+    const a = idOf(l.source), b = idOf(l.target);
+    if (!nodeIds.has(a) || !nodeIds.has(b)) continue;
+    const isFindingEdge = findingMemberIds.has(a) && findingMemberIds.has(b);
+    if (isFindingEdge || l.confidence >= 0.5) pushEdge(l);
+  }
+
+  return { nodeIds, findingMemberIds, edges: edges.slice(0, CONSTELLATION_EDGE_CAP) };
+}
+
+/**
+ * Focus mode: the focused node plus everything within `hops` steps, ranked by edge
+ * strength, capped at 150 nodes. Everything else is removed from the data entirely
+ * (not merely dimmed — at this scale dimming still reads as fog).
+ */
+export function buildFocusSubgraph(
+  focusId: string,
+  nodes: GraphNode[],
+  links: GraphLink[],
+  hops = 2,
+): { nodeIds: Set<string>; edges: GraphLink[] } {
+  const nodeById: Record<string, GraphNode> = {};
+  for (const n of nodes) nodeById[n.id] = n;
+  if (!nodeById[focusId]) return { nodeIds: new Set(), edges: [] };
+
+  const adj: Record<string, { id: string; strength: number }[]> = {};
+  for (const l of links) {
+    const a = idOf(l.source), b = idOf(l.target);
+    if (!nodeById[a] || !nodeById[b]) continue;
+    (adj[a] ||= []).push({ id: b, strength: l.strength || 0 });
+    (adj[b] ||= []).push({ id: a, strength: l.strength || 0 });
+  }
+
+  // BFS by hop, but within each hop rank candidates by edge strength so if we must
+  // truncate at the cap we keep the strongest ties first.
+  const nodeIds = new Set<string>([focusId]);
+  let frontier = [focusId];
+  for (let h = 0; h < hops && nodeIds.size < FOCUS_NODE_CAP; h++) {
+    const candidates: { id: string; strength: number }[] = [];
+    for (const id of frontier) {
+      for (const nb of adj[id] || []) {
+        if (!nodeIds.has(nb.id)) candidates.push(nb);
+      }
+    }
+    candidates.sort((a, b) => b.strength - a.strength);
+    const nextFrontier: string[] = [];
+    for (const c of candidates) {
+      if (nodeIds.size >= FOCUS_NODE_CAP) break;
+      if (nodeIds.has(c.id)) continue;
+      nodeIds.add(c.id);
+      nextFrontier.push(c.id);
+    }
+    frontier = nextFrontier;
+  }
+
+  const edges = links.filter((l) => {
+    const a = idOf(l.source), b = idOf(l.target);
+    return nodeIds.has(a) && nodeIds.has(b);
+  });
+
+  return { nodeIds, edges };
+}
+
+/** Deterministic short hash of a sorted id list, used to key a cached layout in sessionStorage. */
+export function hashIdSet(ids: Iterable<string>): string {
+  const sorted = [...ids].sort();
+  let h = 0;
+  for (const id of sorted) {
+    for (let i = 0; i < id.length; i++) {
+      h = (h * 31 + id.charCodeAt(i)) | 0;
+    }
+    h = (h * 31 + 124) | 0; // separator so "ab","c" != "a","bc"
+  }
+  return (h >>> 0).toString(36) + ':' + sorted.length;
+}
