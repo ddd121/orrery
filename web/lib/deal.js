@@ -166,6 +166,29 @@ function truncate(s, n = 40) {
   return s.length > n ? `${s.slice(0, n - 1)}…` : s;
 }
 
+/* Natural donee phrasing so a party short-name reads correctly in a sentence:
+   "to the Conservatives", "to Labour", "to Reform UK", not "to the Conservative". */
+const PARTY_PHRASE = {
+  Conservative: 'the Conservatives',
+  Conservatives: 'the Conservatives',
+  'Conservative and Unionist Party': 'the Conservatives',
+  Labour: 'Labour',
+  'Labour Party': 'the Labour Party',
+  'Liberal Democrat': 'the Liberal Democrats',
+  'Liberal Democrats': 'the Liberal Democrats',
+  Green: 'the Green Party',
+  'Green Party': 'the Green Party',
+  'Reform UK': 'Reform UK',
+  'Scottish National Party': 'the SNP',
+  SNP: 'the SNP',
+  'Plaid Cymru': 'Plaid Cymru',
+};
+function partyPhrase(name) {
+  if (!name) return 'the party';
+  if (PARTY_PHRASE[name]) return PARTY_PHRASE[name];
+  return /\b(party|uk|democrats|conservatives|greens)\b/i.test(name) ? `the ${name}` : name;
+}
+
 /**
  * A plain-English, fact-only headline built from a finding's `slots`. Never a verdict.
  * CRITICAL: LOOP_CLOSED reports the CONTRACT COUNT, never any contract £ total:
@@ -179,8 +202,8 @@ export function headlineFor(finding) {
       const donation = gbp(s.donation_gbp);
       const count = s.contract_count;
       const parts = [];
-      if (donation) parts.push(`${s.company} gave £${donation} to the ${s.party}.`);
-      else parts.push(`${s.company} is a donor to the ${s.party}.`);
+      if (donation) parts.push(`${s.company} gave £${donation} to ${partyPhrase(s.party)}.`);
+      else parts.push(`${s.company} is a donor to ${partyPhrase(s.party)}.`);
       if (count != null) parts.push(`It also holds ${count} public ${count === 1 ? 'contract' : 'contracts'}.`);
       return parts.join(' ');
     }
@@ -191,8 +214,8 @@ export function headlineFor(finding) {
     case 'BIG_MONEY': {
       const amount = gbp(s.amount_gbp);
       return amount
-        ? `${s.donor} gave £${amount} to the ${s.recipient}.`
-        : `${s.donor} made a donation to the ${s.recipient}.`;
+        ? `${s.donor} gave £${amount} to ${partyPhrase(s.recipient)}.`
+        : `${s.donor} made a donation to ${partyPhrase(s.recipient)}.`;
     }
     case 'CROSSING':
       return `${s.entity} appears in ${s.n_registers} public registers.`;

@@ -49,6 +49,17 @@ export default function MiniOrrery({ finding, nodesById, size = 220, showLabels 
   const isLoop = finding.shape_code === 'LOOP_CLOSED';
   const centreCol = centre ? typeColor(centre.type) : TEXT_2;
 
+  // money flow: for a donation-shaped finding, draw a directional arc from the giver
+  // (centre) to the recipient (first orbiter), labelled with the amount, so a two-body
+  // money finding tells its story instead of sitting as two lonely dots.
+  const money = finding.slots?.amount_gbp ?? finding.slots?.donation_gbp ?? null;
+  const compactGbp = (v) =>
+    '£' + new Intl.NumberFormat('en-GB', { notation: 'compact', maximumFractionDigits: 1 }).format(Number(v));
+  const flow = !isLoop && money != null && positions.length ? positions[0] : null;
+  const flowMid = flow
+    ? { x: cx + (flow.x - cx) * 0.5, y: cy + (flow.y - cy) * 0.5 - 14 }
+    : null;
+
   return (
     <svg
       viewBox={`0 0 ${size} ${size}`}
@@ -57,9 +68,34 @@ export default function MiniOrrery({ finding, nodesById, size = 220, showLabels 
       role="img"
       aria-label={`Mini orrery: ${centre?.name ?? 'finding'} with ${shown.length} connected ${shown.length === 1 ? 'entity' : 'entities'}`}
     >
+      <defs>
+        <marker id="orrery-arrow" markerWidth="7" markerHeight="7" refX="5.5" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" fill={BRASS} fillOpacity={0.85} />
+        </marker>
+      </defs>
+
       {/* the two register rings */}
       <ellipse cx={cx} cy={cy} rx={ringOuterR} ry={ringOuterR * 0.98} fill="none" stroke={HAIRLINE} strokeWidth={1} />
       <ellipse cx={cx} cy={cy} rx={ringInnerR} ry={ringInnerR * 0.98} fill="none" stroke={HAIRLINE} strokeWidth={1} />
+
+      {/* money flow (donation-shaped findings): a directional arc, giver to recipient, with the amount */}
+      {flow && flowMid && (
+        <g>
+          <path
+            d={`M ${cx} ${cy} Q ${flowMid.x} ${flowMid.y} ${flow.x} ${flow.y}`}
+            fill="none"
+            stroke={BRASS}
+            strokeOpacity={0.7}
+            strokeWidth={1.5}
+            markerEnd="url(#orrery-arrow)"
+          />
+          {labelsOn && money != null && (
+            <text x={flowMid.x} y={flowMid.y - 4} textAnchor="middle" style={{ ...TYPO.dataValue, fontSize: 11, fontWeight: 600 }} fill={BRASS}>
+              {compactGbp(money)}
+            </text>
+          )}
+        </g>
+      )}
 
       {/* LOOP_CLOSED: two thin arcs closing the loop between the centre and its orbiters
           (money out, money back): the geometry IS the finding. Subtle, BRASS, 60% opacity. */}
