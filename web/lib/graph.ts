@@ -16,6 +16,7 @@ export type GraphNode = {
   conflictOverlap?: string;
 };
 export type GraphLink = {
+  id?: string;
   source: string;
   target: string;
   rel: string;
@@ -80,7 +81,7 @@ export async function loadGraph(): Promise<{
   };
   const [entsRows, stmtsRows, stypes, etypes] = await Promise.all([
     fetchAll("canonical_entities", "id, entity_type, canonical_name, display_name, category, attributes"),
-    fetchAll("statements", "subject_entity_id, object_entity_id, statement_type, confidence, strength, attributes"),
+    fetchAll("statements", "id, subject_entity_id, object_entity_id, statement_type, confidence, strength, attributes"),
     supabase.from("statement_types").select("code, label"),
     supabase.from("entity_types").select("code, label, ui_color, ui_icon"),
   ]);
@@ -95,6 +96,7 @@ export async function loadGraph(): Promise<{
       maximumFractionDigits: 0,
     }).format(Number(n));
   const links: GraphLink[] = stmtsRows.map((s: any) => ({
+    id: s.id,
     source: s.subject_entity_id,
     target: s.object_entity_id,
     rel: stLabel[s.statement_type] ?? s.statement_type,
@@ -221,4 +223,78 @@ export async function loadFindings(): Promise<{ findings: Finding[]; pairs: Sugg
   }));
 
   return { findings, pairs };
+}
+
+/** One computed takeaway for a single entity (DESIGN_SPEC_V2 "Value Everywhere", Wave 1). */
+export type Insight = {
+  id: string;
+  entity_id: string;
+  kind: string;
+  priority: number;
+  rank: number | null;
+  cohort_size: number | null;
+  slots: Record<string, any>;
+  computed_at: string;
+};
+
+/** A single global landing-page number (public.register_stats). */
+export type RegisterStat = {
+  value: number | null;
+  slots: Record<string, any>;
+};
+
+/**
+ * Reads `public.entity_insights` (grouped by entity, sorted by priority desc) and
+ * `public.register_stats` (keyed by stat), both via the anon key + RLS. Paginated
+ * defensively like `loadGraph`/`loadFindings`; entity_insights alone is ~6k rows,
+ * comfortably past PostgREST's 1,000-row page cap.
+ */
+export async function loadInsights(): Promise<{
+  insightsByEntity: Record<string, Insight[]>;
+  stats: Record<string, RegisterStat>;
+}> {
+  const fetchAll = async (table: string, columns: string): Promise<any[]> => {
+    const out: any[] = [];
+    const size = 1000;
+    for (let from = 0; ; from += size) {
+      const { data, error } = await supabase.from(table).select(columns).range(from, from + size - 1);
+      if (error) throw error;
+      out.push(...(data ?? []));
+      if (!data || data.length < size) break;
+    }
+    return out;
+  };
+
+  const [insightRows, statRows] = await Promise.all([
+    fetchAll("entity_insights", "id, entity_id, kind, priority, rank, cohort_size, slots, computed_at"),
+    fetchAll("register_stats", "stat, value_numeric, slots"),
+  ]);
+
+  const insightsByEntity: Record<string, Insight[]> = {};
+  for (const r of insightRows) {
+    const insight: Insight = {
+      id: r.id,
+      entity_id: r.entity_id,
+      kind: r.kind,
+      priority: Number(r.priority ?? 0),
+      rank: r.rank ?? null,
+      cohort_size: r.cohort_size ?? null,
+      slots: r.slots ?? {},
+      computed_at: r.computed_at,
+    };
+    (insightsByEntity[r.entity_id] ??= []).push(insight);
+  }
+  for (const list of Object.values(insightsByEntity)) {
+    list.sort((a, b) => b.priority - a.priority);
+  }
+
+  const stats: Record<string, RegisterStat> = {};
+  for (const r of statRows) {
+    stats[r.stat] = {
+      value: r.value_numeric != null ? Number(r.value_numeric) : null,
+      slots: r.slots ?? {},
+    };
+  }
+
+  return { insightsByEntity, stats };
 }

@@ -47,7 +47,7 @@ function linkBetween(aId, bId, links) {
   return null;
 }
 
-export default function ConnectView({ nodes, links, types, onOpenEntity, onBack, initialFromId, pairs }) {
+export default function ConnectView({ nodes, links, types, onOpenEntity, onBack, initialFromId, initialToId, pairs }) {
   const nodeById = useMemo(() => {
     const m = {};
     nodes.forEach((n) => (m[n.id] = n));
@@ -56,13 +56,16 @@ export default function ConnectView({ nodes, links, types, onOpenEntity, onBack,
   const ranked = useMemo(() => rankNodes(nodes), [nodes]);
 
   const [fromId, setFromId] = useState(initialFromId && nodeById[initialFromId] ? initialFromId : null);
-  const [toId, setToId] = useState(null);
+  const [toId, setToId] = useState(initialToId && nodeById[initialToId] ? initialToId : null);
   const [thresh, setThresh] = useState(DEFAULT_THRESH);
 
-  // keep A in sync if the view is re-opened from a different dossier
+  // keep A/B in sync if the view is re-opened from a different dossier / finding
   useEffect(() => {
     if (initialFromId && nodeById[initialFromId]) setFromId(initialFromId);
   }, [initialFromId, nodeById]);
+  useEffect(() => {
+    if (initialToId && nodeById[initialToId]) setToId(initialToId);
+  }, [initialToId, nodeById]);
 
   const from = fromId ? nodeById[fromId] : null;
   const to = toId ? nodeById[toId] : null;

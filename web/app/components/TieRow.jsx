@@ -1,13 +1,15 @@
 'use client';
 
 /**
- * TieRow: the confidence/strength row (DESIGN_SPEC.md "The Tie Row").
+ * TieRow: the confidence row (DESIGN_SPEC.md "The Tie Row"; DESIGN_SPEC_V2 section 4
+ * "gauge out, fact in").
  *
- * Confidence and strength are never conflated and never share a visual grammar:
- *   - Confidence (epistemic: is this link real and correctly identified) renders
- *     as a named tier + exact percentage in a squared stamp, coloured by tier.
- *   - Strength (material: how much the tie matters once it's real) renders as a
- *     discrete 4-segment gauge + a word. Never a percentage, never a smooth bar.
+ * Confidence (epistemic: is this link real and correctly identified) renders as a
+ * named tier + exact percentage in a squared stamp, coloured by tier. Strength no
+ * longer gets its own row grammar here: it still drives sort order and the data
+ * model, but a discrete 1-4 gauge read as flat/inverted at current data, so the
+ * per-row visual has been replaced by the concrete fact itself (the rel + amount
+ * + counterpart role, already on line 2).
  *
  * Facts, not verdicts: every row is a sourced public-record connection, not a
  * judgement. Reused across the dossier, Connect hops and the Explore inspector.
@@ -16,15 +18,14 @@ import React from 'react';
 import { ArrowSquareOut, WarningDiamond } from '@phosphor-icons/react';
 import {
   TEXT_1, TEXT_2, TEXT_3, HAIRLINE, BRASS, SIGNAL, RADIUS, TYPO,
-  typeColor, typeIcon, confTier, strengthBand,
+  typeColor, typeIcon, confTier,
 } from '@/lib/graph-utils';
 
 export default function TieRow({ tie, types, onOpen }) {
-  const { other, rel, amount, confidence, strength, method } = tie;
+  const { other, rel, amount, confidence, method } = tie;
   const col = typeColor(other.type, types);
   const Icon = typeIcon(other.type, types);
   const tier = confTier(confidence);
-  const gauge = strengthBand(strength);
   const pct = Math.round(confidence * 100);
 
   return (
@@ -86,16 +87,6 @@ export default function TieRow({ tie, types, onOpen }) {
             {pct}%
           </span>
         </span>
-        <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6 }}>
-          <span style={{ ...TYPO.dataLabel }}>STRENGTH</span>
-          <span
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}
-            title="Strength is how much a tie matters once it is real: the kind of tie, its size, how recent it is, and how unusual."
-          >
-            <StrengthGauge segments={gauge.segments} />
-            <span style={{ ...TYPO.bodySm, color: TEXT_2 }}>{gauge.label}</span>
-          </span>
-        </span>
         <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 5 }}>
           <span style={{ ...TYPO.dataLabel }}>VIA</span>
           <span style={{ ...TYPO.dataValue, color: TEXT_2, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -127,20 +118,3 @@ function ConfidenceStamp({ tier, pct }) {
   );
 }
 
-/* Discrete 4-segment strength gauge: neutral data-ink, never the accent, never a percentage. */
-function StrengthGauge({ segments }) {
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }} aria-hidden>
-      {[1, 2, 3, 4].map((i) => (
-        <span
-          key={i}
-          style={{
-            width: 12, height: 5, borderRadius: 1,
-            border: `1px solid ${HAIRLINE}`,
-            background: i <= segments ? TEXT_2 : 'transparent',
-          }}
-        />
-      ))}
-    </span>
-  );
-}

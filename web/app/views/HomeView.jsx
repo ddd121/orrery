@@ -20,13 +20,14 @@ import {
   typeColor, typeIcon, confTier,
 } from '@/lib/graph-utils';
 import { getOrCreateVisitorId, todayISODate, dealHand, headlineFor, shapeLabel, pivotEntityId } from '@/lib/deal';
+import { insightSentence, topInsight } from '@/lib/insights';
 import MiniOrrery from '../components/MiniOrrery';
 
 /* real entities the START WITH chips resolve against; hidden if absent from this dataset */
 const START_WITH_NAMES = ['Ecotricity Group Limited', 'IPGL Limited', 'GB News', 'Dale Vince'];
 const CONNECT_CHIP = { a: 'Dale Vince', b: 'Labour' };
 
-export default function HomeView({ nodes, links, types, findings = [], pairs = [], onOpenEntity, onExplore, onConnect }) {
+export default function HomeView({ nodes, links, types, findings = [], pairs = [], stats = {}, insightsByEntity = {}, onOpenEntity, onOpenFinding, onOpenLedger, onExplore, onConnect }) {
   const nodesById = useMemo(() => {
     const m = {};
     nodes.forEach((n) => (m[n.id] = n));
@@ -52,19 +53,20 @@ export default function HomeView({ nodes, links, types, findings = [], pairs = [
             public register, and carries its source and an honest confidence score.
           </p>
 
-          <HeroSearch nodes={nodes} types={types} onOpenEntity={onOpenEntity} />
+          <HeroSearch nodes={nodes} types={types} findings={findings} insightsByEntity={insightsByEntity} onOpenEntity={onOpenEntity} />
           <MPFinder nodes={nodes} onOpenEntity={onOpenEntity} />
           <StartWithChips nodes={nodes} types={types} onOpenEntity={onOpenEntity} onConnect={onConnect} />
         </section>
 
         {/* ---------------------------------- RIGHT: THE DEAL ---------------------------------- */}
         <section className="home-deal">
-          <TheDeal nodes={nodes} nodesById={nodesById} findings={findings} onOpenEntity={onOpenEntity} />
+          <TheDeal nodes={nodes} nodesById={nodesById} findings={findings} onOpenFinding={onOpenFinding} />
         </section>
       </div>
 
+      <StateOfTheRegister stats={stats} nodesById={nodesById} onOpenEntity={onOpenEntity} onOpenLedger={onOpenLedger} />
       <CredibilityStrip total={nodes.length} registerCount={registerCount} findingCount={findings.length} />
-      <FromTheLedger findings={findings} nodesById={nodesById} onOpenEntity={onOpenEntity} />
+      <FromTheLedger findings={findings} nodesById={nodesById} onOpenFinding={onOpenFinding} />
 
       <style>{`
         .home-grid {
@@ -86,7 +88,7 @@ function Eyebrow({ children }) {
 }
 
 /* ------------------------------- hero search ------------------------------- */
-function HeroSearch({ nodes, types, onOpenEntity }) {
+function HeroSearch({ nodes, types, findings = [], insightsByEntity = {}, onOpenEntity }) {
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
   const boxRef = useRef(null);
@@ -103,6 +105,23 @@ function HeroSearch({ nodes, types, onOpenEntity }) {
     if (!s) return [];
     return ranked.filter((n) => n.name.toLowerCase().includes(s)).slice(0, 7);
   }, [q, ranked]);
+  const nodesById = useMemo(() => {
+    const m = {};
+    nodes.forEach((n) => (m[n.id] = n));
+    return m;
+  }, [nodes]);
+  const suggestions = useMemo(() => {
+    const seen = new Set();
+    const out = [];
+    for (const f of findings) {
+      const id = pivotEntityId(f, nodesById);
+      if (!id || seen.has(id) || !nodesById[id]) continue;
+      seen.add(id);
+      out.push(nodesById[id]);
+      if (out.length >= 3) break;
+    }
+    return out;
+  }, [findings, nodesById]);
 
   useEffect(() => {
     const onDoc = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false); };
@@ -141,15 +160,39 @@ function HeroSearch({ nodes, types, onOpenEntity }) {
               <span style={{ width: 9, height: 9, borderRadius: '50%', flex: '0 0 auto', background: typeColor(n.type, types) }} />
               <span style={{ flex: 1, minWidth: 0 }}>
                 <span style={{ display: 'block', fontSize: 13.5, color: TEXT_1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.name}</span>
-                <span style={{ display: 'block', fontSize: 11, color: TEXT_2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.role}</span>
+                <span style={{ display: 'block', fontSize: 11, color: TEXT_2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {(() => {
+                    const list = insightsByEntity[n.id];
+                    const s = list && list.length ? insightSentence(topInsight(list)).sentence : '';
+                    return s || n.role;
+                  })()}
+                </span>
               </span>
             </div>
           ))}
         </div>
       )}
       {open && q.trim() && results.length === 0 && (
-        <div style={{ position: 'absolute', top: 52, left: 0, right: 0, zIndex: 30, borderRadius: RADIUS.md, background: INK_2, border: `1px solid ${HAIRLINE}`, padding: '14px', fontSize: 13, color: TEXT_2 }}>
-          No match. Try a surname, a company, or a party.
+        <div style={{ position: 'absolute', top: 52, left: 0, right: 0, zIndex: 30, borderRadius: RADIUS.md, background: INK_2, border: `1px solid ${HAIRLINE}`, padding: '12px', fontSize: 13, color: TEXT_2 }}>
+          <div style={{ marginBottom: suggestions.length ? 9 : 0 }}>No match for that name.</div>
+          {suggestions.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {suggestions.map((n) => (
+                <button
+                  key={n.id}
+                  onClick={() => { onOpenEntity(n.id); setQ(''); setOpen(false); }}
+                  style={{
+                    display: 'block', textAlign: 'left', width: '100%', padding: '7px 8px', borderRadius: RADIUS.sm,
+                    background: 'none', border: 'none', color: BRASS, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(217,166,72,0.10)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                >
+                  {n.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -285,7 +328,7 @@ function StartWithChips({ nodes, types, onOpenEntity, onConnect }) {
 }
 
 /* ---------------------------------- THE DEAL ---------------------------------- */
-function TheDeal({ nodes, nodesById, findings, onOpenEntity }) {
+function TheDeal({ nodes, nodesById, findings, onOpenFinding }) {
   const [visitorId, setVisitorId] = useState(null);
   const [drawCount, setDrawCount] = useState(0);
   const [seen, setSeen] = useState(() => new Set());
@@ -338,11 +381,11 @@ function TheDeal({ nodes, nodesById, findings, onOpenEntity }) {
         </button>
       </div>
 
-      <HeroFindingCard finding={hero} nodesById={nodesById} onOpen={() => openFinding(hero, nodesById, onOpenEntity)} />
+      <HeroFindingCard finding={hero} nodesById={nodesById} onOpen={() => onOpenFinding && onOpenFinding(hero)} />
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginTop: 12 }}>
         {rest.map((f) => (
-          <SmallFindingCard key={f.id} finding={f} onOpen={() => openFinding(f, nodesById, onOpenEntity)} />
+          <SmallFindingCard key={f.id} finding={f} onOpen={() => onOpenFinding && onOpenFinding(f)} />
         ))}
       </div>
 
@@ -352,12 +395,6 @@ function TheDeal({ nodes, nodesById, findings, onOpenEntity }) {
       </p>
     </div>
   );
-}
-
-function openFinding(finding, nodesById, onOpenEntity) {
-  // a dedicated finding page comes later, for now the card opens the pivotal member's dossier
-  const id = pivotEntityId(finding, nodesById);
-  if (id) onOpenEntity(id);
 }
 
 function HeroFindingCard({ finding, nodesById, onOpen }) {
@@ -453,8 +490,100 @@ function CredibilityStrip({ total, registerCount, findingCount }) {
   );
 }
 
+/* ----------------------------- state of the register ----------------------------- */
+/* Four audited numbers straight off register_stats, each clickable to somewhere useful.
+   NO invented numbers: a stat that hasn't been computed simply doesn't render its card,
+   rather than showing a placeholder or a zero that reads as a real fact. */
+function StateOfTheRegister({ stats = {}, nodesById, onOpenEntity, onOpenLedger }) {
+  const gbp = (n) => (n == null ? null : new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0 }).format(n));
+
+  const cards = [];
+
+  const totalMoney = stats.total_political_money;
+  if (totalMoney && totalMoney.value != null) {
+    cards.push({
+      key: 'total_political_money',
+      value: `£${gbp(totalMoney.value)}`,
+      label: 'political money mapped',
+      onClick: onOpenLedger,
+    });
+  }
+
+  const biggest = stats.largest_single_donation;
+  if (biggest && biggest.value != null) {
+    const donor = biggest.slots?.donor_name;
+    const recipient = biggest.slots?.recipient_name;
+    const donorId = biggest.slots?.donor_entity_id;
+    cards.push({
+      key: 'largest_single_donation',
+      value: `£${gbp(biggest.value)}`,
+      label: 'the largest single donation',
+      sub: donor && recipient ? `${donor} to ${recipient}` : undefined,
+      onClick: donorId && nodesById?.[donorId] ? () => onOpenEntity(donorId) : undefined,
+    });
+  }
+
+  const paidTies = stats.parliamentarians_with_paid_ties;
+  if (paidTies && paidTies.value != null) {
+    cards.push({
+      key: 'parliamentarians_with_paid_ties',
+      value: paidTies.value.toLocaleString('en-GB'),
+      label: 'parliamentarians with paid corporate ties',
+      onClick: onOpenLedger,
+    });
+  }
+
+  const loopCos = stats.donor_and_contractor_companies;
+  if (loopCos && loopCos.value != null) {
+    cards.push({
+      key: 'donor_and_contractor_companies',
+      value: loopCos.value.toLocaleString('en-GB'),
+      label: 'companies both donate and hold public contracts',
+      onClick: onOpenLedger,
+    });
+  }
+
+  if (cards.length === 0) return null;
+
+  return (
+    <div style={{ borderBottom: `1px solid ${HAIRLINE}`, background: 'rgba(255,255,255,0.015)' }}>
+      <div className="sotr-strip" style={{ maxWidth: 1160, margin: '0 auto', display: 'grid', gridTemplateColumns: `repeat(${cards.length}, 1fr)` }}>
+        {cards.map((c, i) => (
+          <button
+            key={c.key}
+            onClick={c.onClick}
+            disabled={!c.onClick}
+            style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
+              minHeight: 44, padding: '22px 16px', textAlign: 'center',
+              background: 'none', border: 'none', borderLeft: i > 0 ? `1px solid ${HAIRLINE}` : 'none',
+              cursor: c.onClick ? 'pointer' : 'default', color: TEXT_1,
+            }}
+            onMouseEnter={(e) => { if (c.onClick) e.currentTarget.style.background = 'rgba(217,166,72,0.05)'; }}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+          >
+            <span style={{ ...TYPO.dataValue, fontSize: 22, color: BRASS, fontVariantNumeric: 'tabular-nums' }}>{c.value}</span>
+            <span style={{ ...TYPO.dataLabel, color: TEXT_2 }}>{c.label}</span>
+            {c.sub && (
+              <span style={{ ...TYPO.caption, color: TEXT_3, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
+                {c.sub}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+      <style>{`
+        @media (max-width: 720px) {
+          .sotr-strip { grid-template-columns: repeat(2, 1fr) !important; }
+          .sotr-strip > button:nth-child(3) { border-left: none !important; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 /* ----------------------------- From The Ledger ----------------------------- */
-function FromTheLedger({ findings, nodesById, onOpenEntity }) {
+function FromTheLedger({ findings, nodesById, onOpenFinding }) {
   const top6 = useMemo(() => findings.slice(0, 6), [findings]);
   if (top6.length === 0) return null;
 
@@ -462,7 +591,6 @@ function FromTheLedger({ findings, nodesById, onOpenEntity }) {
     <section style={{ maxWidth: 1160, margin: '0 auto', padding: '32px 20px 64px' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <h2 style={{ ...TYPO.title2, color: TEXT_1, margin: 0 }}>From the ledger</h2>
-        <span style={{ ...TYPO.caption, color: TEXT_3 }}>The full ledger is coming</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 1, borderRadius: RADIUS.md, overflow: 'hidden', border: `1px solid ${HAIRLINE}` }}>
         {top6.map((f, i) => {
@@ -471,7 +599,7 @@ function FromTheLedger({ findings, nodesById, onOpenEntity }) {
           return (
             <button
               key={f.id}
-              onClick={() => openFinding(f, nodesById, onOpenEntity)}
+              onClick={() => onOpenFinding && onOpenFinding(f)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', cursor: 'pointer',
                 padding: '13px 16px', background: INK_1, border: 'none', borderBottom: i < top6.length - 1 ? `1px solid ${HAIRLINE}` : 'none',

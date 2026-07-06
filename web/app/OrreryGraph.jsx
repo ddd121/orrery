@@ -26,8 +26,9 @@ import {
 import {
   findPath, idOf, typeColor, typeIcon,
   buildConstellation, buildFocusSubgraph, hashIdSet,
-  TEXT_1, TEXT_2, HAIRLINE, BRASS, SIGNAL, MONO, SANS,
+  TEXT_1, TEXT_2, HAIRLINE, BRASS, SIGNAL, MONO, SANS, TYPO,
 } from '@/lib/graph-utils';
+import { insightSentence, topInsight } from '@/lib/insights';
 import TieRow from './components/TieRow';
 
 /* OrreryCanvas touches `window` (canvas + d3-force), so it's client-only. */
@@ -47,9 +48,10 @@ const MOBILE_BREAK = 720;
 
 /* ================================ APP ================================ */
 export default function OrreryGraph({
-  nodes: RAW_NODES, links: RAW_LINKS, types: TYPES, findings: RAW_FINDINGS,
+  nodes: RAW_NODES, links: RAW_LINKS, types: TYPES, findings: RAW_FINDINGS, insightsByEntity,
   initialFocusId = null, autoWelcome = true, onOpenEntity,
 }) {
+  const insightsByEntitySafe = insightsByEntity || {};
   const findings = RAW_FINDINGS || [];
   const allNodes = RAW_NODES || [];
   const allLinks = RAW_LINKS || [];
@@ -422,6 +424,19 @@ export default function OrreryGraph({
 
             {/* scrollable detail */}
             <div className="sc" style={{ flex: 1, overflowY: 'auto', padding: '16px 18px 28px' }}>
+              {(() => {
+                const list = insightsByEntitySafe[selNode.id];
+                if (!list || list.length === 0) return null;
+                const { sentence, cohortLine } = insightSentence(topInsight(list));
+                if (!sentence) return null;
+                return (
+                  <div style={{ marginBottom: 16 }}>
+                    <p style={{ ...TYPO.bodySm, color: TEXT_1, margin: 0 }}>{sentence}</p>
+                    {cohortLine && <p style={{ ...TYPO.dataLabel, color: MUTE, margin: '4px 0 0' }}>{cohortLine}</p>}
+                  </div>
+                );
+              })()}
+
               {selNode.conflict && (() => {
                 const low = selNode.conflictStrength === 'low';
                 const strong = selNode.conflictStrength === 'strong';

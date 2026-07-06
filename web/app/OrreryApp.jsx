@@ -22,6 +22,10 @@ import {
 import HomeView from './views/HomeView';
 import EntityView from './views/EntityView';
 import ConnectView from './views/ConnectView';
+import FindingView from './views/FindingView';
+import LedgerView from './views/LedgerView';
+import { insightSentence, topInsight } from '@/lib/insights';
+import { shapeLabel, pivotEntityId } from '@/lib/deal';
 
 const OrreryGraph = lazy(() => import('./OrreryGraph'));
 
@@ -39,13 +43,17 @@ function rankNodes(nodes) {
   );
 }
 
-export default function OrreryApp({ nodes, links, types, findings, pairs }) {
+export default function OrreryApp({ nodes, links, types, findings, pairs, insightsByEntity, stats }) {
   const [view, setView] = useState('home');
   const findingsSafe = findings || [];
   const pairsSafe = pairs || [];
+  const insightsByEntitySafe = insightsByEntity || {};
+  const statsSafe = stats || {};
   const [entityId, setEntityId] = useState(null);
   const [exploreFocus, setExploreFocus] = useState(null);
   const [connectFrom, setConnectFrom] = useState(null);
+  const [connectTo, setConnectTo] = useState(null);
+  const [findingId, setFindingId] = useState(null);
 
   const ranked = useMemo(() => rankNodes(nodes), [nodes]);
   const nodeById = useMemo(() => {
@@ -53,6 +61,12 @@ export default function OrreryApp({ nodes, links, types, findings, pairs }) {
     nodes.forEach((n) => (m[n.id] = n));
     return m;
   }, [nodes]);
+  const findingById = useMemo(() => {
+    const m = {};
+    findingsSafe.forEach((f) => (m[f.id] = f));
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [findingsSafe]);
 
   /* Reflect the current finding in the URL hash so a dossier / path / node can be shared and
      restored. replaceState keeps history clean and does NOT fire hashchange, so writing here
@@ -64,7 +78,7 @@ export default function OrreryApp({ nodes, links, types, findings, pairs }) {
   };
   // Deep-links key on the entity NAME, not its canonical id: ids are regenerated on every
   // pipeline recompute, so a name-based link stays valid across rebuilds (and reads cleanly
-  // when shared, e.g. #entity=Ecotricity Group Limited).
+  // when shared, e.g. #entity=Ecotricity Group Limited). Findings keep their own stable id.
   const nameOf = (id) => (id && nodeById[id] ? nodeById[id].name : null);
   const nodeByName = (name) => nodes.find((n) => n.name === name) || null;
 
@@ -82,17 +96,32 @@ export default function OrreryApp({ nodes, links, types, findings, pairs }) {
     const nm = nameOf(focusId);
     setHash(nm ? `explore=${encodeURIComponent(nm)}` : 'explore');
   };
-  const goConnect = (initialFromId) => {
+  const goConnect = (initialFromId, initialToId) => {
     const from = initialFromId && nodeById[initialFromId] ? initialFromId : null;
+    const to = initialToId && nodeById[initialToId] ? initialToId : null;
     setConnectFrom(from);
+    setConnectTo(to);
     setView('connect');
     const nm = nameOf(from);
     setHash(nm ? `connect=${encodeURIComponent(nm)}` : 'connect');
     if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
   };
+  const openFinding = (findingOrId) => {
+    const id = typeof findingOrId === 'string' ? findingOrId : findingOrId?.id;
+    if (!id) return;
+    setFindingId(id);
+    setView('finding');
+    setHash(`finding=${encodeURIComponent(id)}`);
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
+  };
+  const openLedger = () => {
+    setView('ledger');
+    setHash('findings');
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0 });
+  };
 
   /* Deep-link restore: on first load (and back/forward), open whatever the hash names — matched
-     by entity name so a shared link survives pipeline recomputes. */
+     by entity name so a shared link survives pipeline recomputes; findings match by their own id. */
   useEffect(() => {
     const applyHash = () => {
       const h = window.location.hash.replace(/^#/, '');
@@ -105,10 +134,14 @@ export default function OrreryApp({ nodes, links, types, findings, pairs }) {
         setView('home'); setEntityId(null);
       } else if (k === 'connect') {
         const n = v ? nodeByName(v) : null;
-        setConnectFrom(n ? n.id : null); setView('connect');
+        setConnectFrom(n ? n.id : null); setConnectTo(null); setView('connect');
       } else if (k === 'explore') {
         const n = v ? nodeByName(v) : null;
         setExploreFocus(n ? n.id : null); setView('explore');
+      } else if (k === 'finding' && v) {
+        setFindingId(v); setView('finding');
+      } else if (k === 'findings') {
+        setView('ledger');
       } else {
         setView('home'); setEntityId(null);
       }
@@ -119,11 +152,19 @@ export default function OrreryApp({ nodes, links, types, findings, pairs }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes]);
 
-  /* document.title per view, so a shared tab/bookmark reads sensibly. */
+  /* document.title per view, so a shared tab/bookmark reads sensibly. Recomputed whenever the
+     resolved entity/finding for the current view changes, not just on `view` itself — otherwise
+     switching between two dossiers (view stays 'entity', only entityId changes) would leave a
+     stale title, which is exactly the bug this was written to fix. */
   useEffect(() => {
     if (typeof document === 'undefined') return;
     if (view === 'entity' && entityId && nodeById[entityId]) {
       document.title = `${nodeById[entityId].name} · ORRERY`;
+    } else if (view === 'finding') {
+      const f = findingId ? findingById[findingId] : null;
+      document.title = f ? `${shapeLabel(f.shape_code)} · ORRERY` : 'Finding · ORRERY';
+    } else if (view === 'ledger') {
+      document.title = 'Findings · ORRERY';
     } else if (view === 'connect') {
       document.title = 'Connection · ORRERY';
     } else if (view === 'explore') {
@@ -131,29 +172,44 @@ export default function OrreryApp({ nodes, links, types, findings, pairs }) {
     } else {
       document.title = 'ORRERY';
     }
-  }, [view, entityId, nodeById]);
+  }, [view, entityId, nodeById, findingId, findingById]);
 
-  // which header tab reads as active for the current view (home + entity both live under Findings)
+  // which header tab reads as active for the current view (home + entity both live under Findings;
+  // the Findings tab itself now opens the ledger, so 'ledger' and 'finding' read as that tab too)
   const activeTab = view === 'connect' ? 'connect' : view === 'explore' ? 'explore' : 'findings';
 
-  // breadcrumb trail for every non-home view
+  // breadcrumb trail for every non-home view. The Findings ledger is now the root for the
+  // dossier/connect/explore/finding trails too, per Wave 4's "Findings tab opens the Ledger".
   const crumbs = useMemo(() => {
     if (view === 'entity' && entityId && nodeById[entityId]) {
       return [
-        { label: 'Findings', onClick: openHome },
+        { label: 'Findings', onClick: openLedger },
         { label: 'Dossier' },
         { label: nodeById[entityId].name },
       ];
     }
+    if (view === 'finding' && findingId && findingById[findingId]) {
+      const f = findingById[findingId];
+      const pivotId = pivotEntityId(f, nodeById);
+      const pivotName = pivotId && nodeById[pivotId] ? nodeById[pivotId].name : null;
+      return [
+        { label: 'Findings', onClick: openLedger },
+        { label: shapeLabel(f.shape_code) },
+        ...(pivotName ? [{ label: pivotName }] : []),
+      ];
+    }
+    if (view === 'ledger') {
+      return [{ label: 'Findings' }];
+    }
     if (view === 'connect') {
-      return [{ label: 'Findings', onClick: openHome }, { label: 'Connection' }];
+      return [{ label: 'Findings', onClick: openLedger }, { label: 'Connection' }];
     }
     if (view === 'explore') {
-      return [{ label: 'Findings', onClick: openHome }, { label: 'Full network' }];
+      return [{ label: 'Findings', onClick: openLedger }, { label: 'Full network' }];
     }
     return null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, entityId, nodeById]);
+  }, [view, entityId, nodeById, findingId, findingById]);
 
   const isExplore = view === 'explore';
   return (
@@ -168,8 +224,12 @@ export default function OrreryApp({ nodes, links, types, findings, pairs }) {
         ranked={ranked}
         types={types}
         activeTab={activeTab}
+        insightsByEntity={insightsByEntitySafe}
+        findings={findingsSafe}
+        nodeById={nodeById}
         onPick={openEntity}
         onHome={openHome}
+        onFindings={openLedger}
         onExplore={() => openExplore(null)}
         onConnect={() => goConnect(null)}
       />
@@ -192,6 +252,7 @@ export default function OrreryApp({ nodes, links, types, findings, pairs }) {
                 links={links}
                 types={types}
                 findings={findingsSafe}
+                insightsByEntity={insightsByEntitySafe}
                 initialFocusId={exploreFocus}
                 autoWelcome={false}
                 onOpenEntity={openEntity}
@@ -206,7 +267,11 @@ export default function OrreryApp({ nodes, links, types, findings, pairs }) {
             types={types}
             findings={findingsSafe}
             pairs={pairsSafe}
+            stats={statsSafe}
+            insightsByEntity={insightsByEntitySafe}
             onOpenEntity={openEntity}
+            onOpenFinding={openFinding}
+            onOpenLedger={openLedger}
             onExplore={() => openExplore(null)}
             onConnect={() => goConnect(null)}
           />
@@ -217,8 +282,11 @@ export default function OrreryApp({ nodes, links, types, findings, pairs }) {
             nodes={nodes}
             links={links}
             types={types}
+            insights={insightsByEntitySafe[entityId] || []}
+            findings={findingsSafe}
             onOpenEntity={openEntity}
-            onBack={openHome}
+            onOpenFinding={openFinding}
+            onBack={openLedger}
             onExplore={() => openExplore(entityId)}
             onConnect={() => goConnect(entityId)}
           />
@@ -230,8 +298,31 @@ export default function OrreryApp({ nodes, links, types, findings, pairs }) {
             types={types}
             pairs={pairsSafe}
             onOpenEntity={openEntity}
-            onBack={openHome}
+            onBack={openLedger}
             initialFromId={connectFrom}
+            initialToId={connectTo}
+          />
+        )}
+        {view === 'finding' && (
+          <FindingView
+            finding={findingId ? findingById[findingId] : null}
+            nodes={nodes}
+            links={links}
+            types={types}
+            onOpenEntity={openEntity}
+            onConnect={goConnect}
+            onExplore={openExplore}
+            onBack={openLedger}
+          />
+        )}
+        {view === 'ledger' && (
+          <LedgerView
+            findings={findingsSafe}
+            nodes={nodes}
+            types={types}
+            onOpenFinding={openFinding}
+            onOpenEntity={openEntity}
+            onBack={openHome}
           />
         )}
       </main>
@@ -239,8 +330,34 @@ export default function OrreryApp({ nodes, links, types, findings, pairs }) {
   );
 }
 
+/* The second line of a search result: the entity's top insight sentence when one
+   exists, falling back to its role — so search always returns a fact, never a blank. */
+function searchSecondLine(node, insightsByEntity) {
+  const list = insightsByEntity?.[node.id];
+  if (list && list.length) {
+    const { sentence } = insightSentence(topInsight(list));
+    if (sentence) return sentence;
+  }
+  return node.role;
+}
+
+/* The three pivot entities of the top-surprise findings, offered as suggestions
+   when a search comes up empty — search must never dead-end. */
+function searchSuggestions(findings, nodeById) {
+  const seen = new Set();
+  const out = [];
+  for (const f of findings) {
+    const id = pivotEntityId(f, nodeById);
+    if (!id || seen.has(id) || !nodeById[id]) continue;
+    seen.add(id);
+    out.push(nodeById[id]);
+    if (out.length >= 3) break;
+  }
+  return out;
+}
+
 /* ----------------------------- shared header ----------------------------- */
-function Header({ ranked, types, activeTab, onPick, onHome, onExplore, onConnect }) {
+function Header({ ranked, types, activeTab, insightsByEntity, findings, nodeById, onPick, onHome, onFindings, onExplore, onConnect }) {
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -252,6 +369,11 @@ function Header({ ranked, types, activeTab, onPick, onHome, onExplore, onConnect
     if (!s) return [];
     return ranked.filter((n) => n.name.toLowerCase().includes(s)).slice(0, 8);
   }, [q, ranked]);
+
+  const suggestions = useMemo(
+    () => searchSuggestions(findings || [], nodeById || {}),
+    [findings, nodeById],
+  );
 
   useEffect(() => {
     const onDoc = (e) => { if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false); };
@@ -283,7 +405,7 @@ function Header({ ranked, types, activeTab, onPick, onHome, onExplore, onConnect
 
       {/* text tabs: Findings / Connect / Explore — active tab gets a brass underline flush with the header's bottom border */}
       <nav style={{ display: 'flex', alignItems: 'stretch', height: '100%', gap: 2, marginLeft: 4 }}>
-        <TabButton label="Findings" Icon={ListMagnifyingGlass} active={activeTab === 'findings'} onClick={onHome} />
+        <TabButton label="Findings" Icon={ListMagnifyingGlass} active={activeTab === 'findings'} onClick={onFindings} />
         <TabButton label="Connect" Icon={Path} active={activeTab === 'connect'} onClick={onConnect} />
         <TabButton label="Explore" Icon={Graph} active={activeTab === 'explore'} onClick={onExplore} />
       </nav>
@@ -338,7 +460,7 @@ function Header({ ranked, types, activeTab, onPick, onHome, onExplore, onConnect
                 <span style={{ width: 9, height: 9, borderRadius: '50%', flex: '0 0 auto', background: typeColor(n.type, types) }} />
                 <span style={{ flex: 1, minWidth: 0 }}>
                   <span style={{ display: 'block', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.name}</span>
-                  <span style={{ display: 'block', fontSize: 10.5, color: MUTE, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.role}</span>
+                  <span style={{ display: 'block', fontSize: 10.5, color: MUTE, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{searchSecondLine(n, insightsByEntity)}</span>
                 </span>
                 {n.conflict && <span style={{ fontFamily: MONO, fontSize: 9, color: VERM, flex: '0 0 auto', opacity: n.conflictStrength === 'low' ? 0.5 : 1 }}>merits a look</span>}
               </div>
@@ -346,8 +468,26 @@ function Header({ ranked, types, activeTab, onPick, onHome, onExplore, onConnect
           </div>
         )}
         {open && q.trim() && results.length === 0 && (
-          <div style={{ position: 'absolute', top: 42, left: 0, right: 0, zIndex: 50, borderRadius: 11, background: PANEL, border: `1px solid ${HAIR}`, padding: '14px 12px', fontSize: 12.5, color: MUTE }}>
-            No match. Try a surname, a company, or a party.
+          <div style={{ position: 'absolute', top: 42, left: 0, right: 0, zIndex: 50, borderRadius: 11, background: PANEL, border: `1px solid ${HAIR}`, padding: '12px', fontSize: 12.5, color: MUTE }}>
+            <div style={{ marginBottom: suggestions.length ? 9 : 0 }}>No match for that name.</div>
+            {suggestions.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                {suggestions.map((n) => (
+                  <button
+                    key={n.id}
+                    onClick={() => pick(n.id)}
+                    style={{
+                      display: 'block', textAlign: 'left', width: '100%', padding: '7px 8px', borderRadius: 7,
+                      background: 'none', border: 'none', color: GOLD, fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(232,182,90,0.12)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                  >
+                    {n.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -460,7 +600,7 @@ function HelpSheet({ onClose }) {
         <HelpHead>Confidence, and strength</HelpHead>
         <HelpPara><b style={{ color: GOLD }}>Confidence</b> is how sure we are a link is real and correctly identified. A shared Companies House number is near-certain; a name-only match is weaker and shown as such. <b style={{ color: GOLD }}>Strength</b> is how meaningful the tie is once it's real. Links established on an official identifier render solid; anything inferred renders dotted, and nothing uncertain about a named person is ever stated as fact.</HelpPara>
 
-        <HelpPara><b style={{ color: GOLD }}>Explore</b> opens the full network for the curious — but you never need it to get an answer.</HelpPara>
+        <HelpPara><b style={{ color: GOLD }}>Explore</b> opens the full network for the curious, but you never need it to get an answer.</HelpPara>
         <div style={{ padding: '11px 13px', borderRadius: 10, background: 'rgba(229,101,75,0.08)', border: '1px solid rgba(229,101,75,0.25)', fontSize: 12.5, color: '#F0A593', lineHeight: 1.55 }}>
           A connection is a sourced public-record fact, not a judgement or any allegation of wrongdoing. ORRERY surfaces overlaps and lets you draw your own conclusion.
         </div>

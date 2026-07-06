@@ -18,12 +18,17 @@ import {
   GOLD, VERM, TEXT, MUTE, HAIR, MONO, TYPO,
   typeColor, typeIcon, typeLabel, tiesOf, idOf,
 } from '@/lib/graph-utils';
+import { insightSentence } from '@/lib/insights';
+import { headlineFor } from '@/lib/deal';
 import ForceGraph from '../components/ForceGraph';
 import TieRow from '../components/TieRow';
+import MiniOrrery from '../components/MiniOrrery';
+import { CuttingButton } from '../components/Cutting';
 
 const EGO_CAP = 40;
+const HEADLINE_CAP = 3;
 
-export default function EntityView({ entityId, nodes, links, types, onOpenEntity, onBack, onExplore, onConnect }) {
+export default function EntityView({ entityId, nodes, links, types, insights = [], findings = [], onOpenEntity, onOpenFinding, onBack, onExplore, onConnect }) {
   const nodeById = useMemo(() => {
     const m = {};
     nodes.forEach((n) => (m[n.id] = n));
@@ -36,6 +41,21 @@ export default function EntityView({ entityId, nodes, links, types, onOpenEntity
     [entityId, links, nodes, node],
   );
   const totalTies = useMemo(() => groups.reduce((s, g) => s + g.ties.length, 0), [groups]);
+
+  /* the entity's top 1-3 takeaways (already sorted priority desc by loadInsights). */
+  const topInsights = useMemo(() => (insights || []).slice(0, HEADLINE_CAP), [insights]);
+
+  /* the highest-surprise finding that touches this entity, if any — the SPARK. */
+  const spark = useMemo(() => {
+    if (!findings || findings.length === 0) return null;
+    let best = null;
+    for (const f of findings) {
+      if ((f.member_entity_ids || []).includes(entityId)) {
+        if (!best || (f.surprise || 0) > (best.surprise || 0)) best = f;
+      }
+    }
+    return best;
+  }, [findings, entityId]);
 
   /* focused ego-graph: this node + its direct neighbours (capped, strongest first) */
   const ego = useMemo(() => {
@@ -93,6 +113,55 @@ export default function EntityView({ entityId, nodes, links, types, onOpenEntity
         </div>
       )}
 
+      {/* ----------------------------- the headline ----------------------------- */}
+      {(topInsights.length > 0 || spark) && (
+        <section style={{ marginTop: 22 }}>
+          <div style={{ ...TYPO.dataLabel, marginBottom: 10 }}>THE HEADLINE</div>
+          {topInsights.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {topInsights.map((ins, i) => {
+                const { sentence, cohortLine } = insightSentence(ins);
+                if (!sentence) return null;
+                return (
+                  <div key={ins.id || i}>
+                    <p style={i === 0 ? { ...TYPO.title1, color: TEXT, margin: 0 } : { ...TYPO.body, color: TEXT, margin: 0 }}>
+                      {sentence}
+                    </p>
+                    {cohortLine && (
+                      <p style={{ ...TYPO.dataLabel, color: MUTE, margin: '4px 0 0' }}>{cohortLine}</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {spark && (
+            <button
+              onClick={() => onOpenFinding && onOpenFinding(spark)}
+              className="in"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 14, width: '100%', textAlign: 'left', cursor: 'pointer',
+                marginTop: 16, padding: 14, borderRadius: 13, background: 'rgba(232,182,90,0.06)',
+                border: '1px solid rgba(232,182,90,0.3)', color: TEXT,
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(232,182,90,0.55)')}
+              onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'rgba(232,182,90,0.3)')}
+            >
+              <span style={{ flex: '0 0 auto' }}>
+                <MiniOrrery finding={spark} nodesById={nodeById} size={72} showLabels={false} />
+              </span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontFamily: MONO, fontSize: 9.5, letterSpacing: '.12em', textTransform: 'uppercase', color: GOLD, marginBottom: 4 }}>
+                  A finding touches this entity
+                </span>
+                <span style={{ display: 'block', fontSize: 13.5, lineHeight: 1.45 }}>{headlineFor(spark)}</span>
+              </span>
+            </button>
+          )}
+        </section>
+      )}
+
       {/* ----------------------------- two columns ----------------------------- */}
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 24, marginTop: 24 }} className="dossier-grid">
         {/* connections */}
@@ -108,7 +177,7 @@ export default function EntityView({ entityId, nodes, links, types, onOpenEntity
 
           {groups.length > 0 && (
             <p style={{ ...TYPO.caption, margin: '0 0 16px' }}>
-              Confidence is how sure we are a link is real and correctly identified. Strength is how much the tie matters once it is real. The two are independent: a certain link can be trivial, and a strong tie can be uncertain.
+              Confidence is how sure we are a link is real and correctly identified. Ties are ordered by how much they matter: the kind of tie, its size and how unusual it is.
             </p>
           )}
 
@@ -166,7 +235,16 @@ export default function EntityView({ entityId, nodes, links, types, onOpenEntity
               >
                 <Path size={16} /> Find a path from here
               </button>
-              <ShareButton />
+              <div style={{ display: 'flex', gap: 10 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <ShareButton />
+                </div>
+                {spark && (
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <CuttingButton finding={spark} nodesById={nodeById} label="Copy as cutting" />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </aside>
@@ -230,7 +308,7 @@ function ShareButton() {
       type="button"
       onClick={copy}
       title="Copy a shareable link to this dossier"
-      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, height: 44, borderRadius: 11, background: copied ? 'rgba(124,197,142,0.12)' : 'rgba(255,255,255,0.04)', border: `1px solid ${copied ? 'rgba(124,197,142,0.5)' : HAIR}`, color: copied ? '#7CC58E' : MUTE, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', height: 44, borderRadius: 11, background: copied ? 'rgba(124,197,142,0.12)' : 'rgba(255,255,255,0.04)', border: `1px solid ${copied ? 'rgba(124,197,142,0.5)' : HAIR}`, color: copied ? '#7CC58E' : MUTE, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
     >
       {copied ? <><Check size={16} /> Link copied</> : <><LinkSimple size={16} /> Copy link to this finding</>}
     </button>
