@@ -277,3 +277,62 @@ export function pivotEntityId(finding, nodesById) {
 }
 
 export { truncate };
+
+/* ------------------------------ why-this-merits-a-look ------------------------------ */
+/**
+ * whyLine(finding): one plain-English sentence (reading age ~12, no jargon) explaining
+ * why a finding merits a look. Never a verdict: it describes the structural pattern
+ * only, and states no claim beyond it. Slot-driven and degrades gracefully when a slot
+ * is missing, so a sparse finding still reads as a complete honest sentence.
+ */
+export function whyLine(finding) {
+  const s = finding.slots || {};
+  switch (finding.shape_code) {
+    case 'LOOP_CLOSED':
+      return 'Money went to a party, and public contracts came to the same company. That two-way flow is why this merits a look.';
+    case 'OVERSEAS_MONEY':
+      return 'Donations linked to overseas residence face extra rules in the UK. The size and origin of this one make it worth a look.';
+    case 'SHARED_BENCH': {
+      const n = s.n_people;
+      return n != null
+        ? `One organisation tied to ${n} lawmakers is a concentration worth knowing about.`
+        : 'One organisation tied to several lawmakers is a concentration worth knowing about.';
+    }
+    case 'FAMILY_DESK':
+      return 'Two public figures sharing one company is worth a look.';
+    case 'BIG_MONEY': {
+      const amount = gbp(s.amount_gbp);
+      return amount
+        ? `£${amount} is among the largest single donations in this register.`
+        : 'This is among the largest single donations in this register.';
+    }
+    case 'CROSSING': {
+      const n = s.n_registers;
+      return n != null
+        ? `The same name appears in ${n} separate public registers.`
+        : 'The same name appears in separate public registers.';
+    }
+    case 'SECTOR_OVERLAP':
+      return 'A lawmaker sits where their declared interests overlap with their public role.';
+    case 'NEW_ON_REGISTER':
+      return 'This appeared on the register in the last 30 days.';
+    default:
+      return 'A sourced structural pattern in the public registers, worth a look.';
+  }
+}
+
+/* ------------------------------ share text ------------------------------ */
+/**
+ * shareText(finding): a compact, fact-only prefill for social share intents. Kept under
+ * ~200 chars (truncating the headline if needed) so it survives every platform's intent
+ * URL without further trimming.
+ */
+export function shareText(finding) {
+  const registers = typeof finding.slots?.n_registers === 'number' ? finding.slots.n_registers : null;
+  const suffix = registers != null
+    ? `Sourced from ${registers} public ${registers === 1 ? 'register' : 'registers'}. `
+    : 'Sourced from the public registers. ';
+  const budget = 200 - suffix.length;
+  const headline = truncate(headlineFor(finding), Math.max(20, budget));
+  return `${headline} ${suffix}`;
+}
