@@ -9,8 +9,12 @@
 --   EC donors   -> DonorId ; EC recipients -> RegulatedEntityId
 --   everything else -> singleton
 
+-- findings/suggested_pairs (DESIGN_SPEC_V2 Step 1) are rebuilt from canonical_entities/statements
+-- by findings_v1.sql at the end of the same recompute build run; truncate them here too so the
+-- FK from suggested_pairs to canonical_entities does not block this truncate.
 truncate table public.statement_assertions, public.statements,
-               public.mention_resolutions, public.canonical_entities;
+               public.mention_resolutions, public.canonical_entities,
+               public.suggested_pairs, public.findings;
 
 -- 1) Companies by normalised company_number (cross-source)
 with src as (
