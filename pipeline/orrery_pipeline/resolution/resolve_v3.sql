@@ -9,12 +9,14 @@
 --   EC donors   -> DonorId ; EC recipients -> RegulatedEntityId
 --   everything else -> singleton
 
--- findings/suggested_pairs (DESIGN_SPEC_V2 Step 1) are rebuilt from canonical_entities/statements
--- by findings_v1.sql at the end of the same recompute build run; truncate them here too so the
--- FK from suggested_pairs to canonical_entities does not block this truncate.
+-- findings/suggested_pairs (DESIGN_SPEC_V2 Step 1) and entity_insights (Value Everywhere Wave 1)
+-- are rebuilt from canonical_entities/statements later in the same recompute build run; truncate
+-- them here too so the FKs referencing canonical_entities do not block this truncate (a plain
+-- TRUNCATE does not cascade to referencing tables unless they are listed or CASCADE is given).
 truncate table public.statement_assertions, public.statements,
                public.mention_resolutions, public.canonical_entities,
-               public.suggested_pairs, public.findings;
+               public.suggested_pairs, public.findings,
+               public.entity_insights;
 
 -- 1) Companies by normalised company_number (cross-source)
 with src as (

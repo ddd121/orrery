@@ -1,12 +1,27 @@
 # ORRERY — Build Log & Resume Guide
 
 > Living handoff doc. If a session resumes cold, read this + `CLAUDE.md` + the engine spec.
-> Last updated: 2026-07-03.
+> Last updated: 2026-07-06.
 
 ## Status
 
-Milestones **1–7 done + a findings-first UX rebuild**; now on a **launch-readiness push**
-(calibration → depth → polish → international; hosting/auth excluded per Roy — "v last").
+**v2 "Discovery Engine" push in flight** (specs: `docs/DESIGN_SPEC.md` = "The Register" visual
+system; `docs/DESIGN_SPEC_V2.md` = the discovery product). Shipped so far: the **findings pool**
+(`graph/findings_v1.sql`: 494 surprise-ranked, confidence-gated (>=0.80) sourced patterns across 8
+shapes; QUIET_PORTFOLIO excluded from the UI as unsafe framing; contract £ are ceilings so the UI
+uses counts only), the **Home Deal** (seeded per-visitor sampler + MiniOrrery + Deal another + Find
+your MP), and **Explore as a constellation** (300-node cap, focus mode, honesty chip, hard freeze,
+persistent header). Now building "Value Everywhere" (approved plan in the plans file): W1 the
+**Takeaway engine** (`graph/insights_v1.sql`: entity_insights for EVERY entity — ranks/percentiles/
+onlys/bridges + a NEAREST_NOTABLE floor — and register_stats aggregates for the landing), W2
+takeaways in the UI (dossier headline + spark, search-with-answers, state-of-the-register strip,
+TieRow gauge -> fact line), W3 the **Cutting** (1200x630 share image), finding permalink page +
+Ledger, W4 shell (tabs/breadcrumbs/titles, Connect vertical chain + suggested pairs, dash purge).
+Main loop is now **Fable 5** (Roy's /model switch); Sonnet codes chunks; announce routing + cost.
+
+Previous state (still true underneath): milestones 1-7 + the findings-first rebuild; the
+launch-readiness push (calibration → depth → polish → international; hosting/auth excluded per Roy,
+"v last").
 A **6-register** UK power-map (Companies House · Electoral Commission · Parliament members ·
 Register of Members' Interests · **Contracts Finder** · **Register of Lords' Interests**) is
 **live** at `localhost:3000`, pushed to `github.com/ddd121/orrery` (`main`). **5,903 entities /
