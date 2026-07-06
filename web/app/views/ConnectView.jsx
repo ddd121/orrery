@@ -17,8 +17,8 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { MagnifyingGlass, X, ArrowLeft, ArrowRight, Path, ArrowCounterClockwise, Info, SmileySad } from '@phosphor-icons/react';
 import {
-  GOLD, VERM, TEXT, MUTE, HAIR, PANEL, MONO, POSITIVE, SIGNAL, BRASS, TYPO, RADIUS,
-  typeColor, typeIcon, confColor, findPath, idOf,
+  GOLD, VERM, TEXT, MUTE, HAIR, PANEL, MONO, POSITIVE, SIGNAL, BRASS, TYPO, RADIUS, TEXT_1, TEXT_2,
+  typeColor, typeIcon, confColor, confTier, findPath, idOf,
 } from '@/lib/graph-utils';
 import ForceGraph from '../components/ForceGraph';
 
@@ -47,7 +47,7 @@ function linkBetween(aId, bId, links) {
   return null;
 }
 
-export default function ConnectView({ nodes, links, types, onOpenEntity, onBack, initialFromId }) {
+export default function ConnectView({ nodes, links, types, onOpenEntity, onBack, initialFromId, pairs }) {
   const nodeById = useMemo(() => {
     const m = {};
     nodes.forEach((n) => (m[n.id] = n));
@@ -127,7 +127,7 @@ export default function ConnectView({ nodes, links, types, onOpenEntity, onBack,
           </span>
           <div>
             <h1 style={{ fontSize: 'clamp(20px, 4vw, 26px)', fontWeight: 800, margin: 0, lineHeight: 1.18 }}>How are they connected?</h1>
-            <p style={{ fontSize: 13, color: MUTE, margin: '4px 0 0' }}>Pick two names — we trace the shortest sourced route between them.</p>
+            <p style={{ fontSize: 13, color: MUTE, margin: '4px 0 0' }}>Pick two names. We trace the shortest sourced route between them.</p>
           </div>
         </div>
       </div>
@@ -156,6 +156,15 @@ export default function ConnectView({ nodes, links, types, onOpenEntity, onBack,
           onClear={() => setToId(null)}
         />
       </div>
+
+      {/* ----------------------------- suggested pairs ----------------------------- */}
+      {!from && !to && pairs && pairs.length > 0 && (
+        <SuggestedPairs
+          pairs={pairs}
+          nodeById={nodeById}
+          onPick={(a, b) => { setFromId(a); setToId(b); }}
+        />
+      )}
 
       {/* ----------------------------- confidence ----------------------------- */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 18, flexWrap: 'wrap' }}>
@@ -212,6 +221,44 @@ export default function ConnectView({ nodes, links, types, onOpenEntity, onBack,
           .connect-arrow { display: grid !important; }
         }
       `}</style>
+    </div>
+  );
+}
+
+/* ------------------------------- suggested pairs ------------------------------- */
+/* Cross-register endpoint pairs worth tracing (public.suggested_pairs, fetched in
+   loadFindings but never rendered until now). Shown only while both pickers are
+   empty, as a fast way in rather than typing two names cold. */
+function SuggestedPairs({ pairs, nodeById, onPick }) {
+  const chips = useMemo(
+    () =>
+      pairs
+        .map((p) => ({ ...p, a: nodeById[p.from_entity_id], b: nodeById[p.to_entity_id] }))
+        .filter((p) => p.a && p.b)
+        .slice(0, 3),
+    [pairs, nodeById],
+  );
+  if (chips.length === 0) return null;
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ ...TYPO.dataLabel, marginBottom: 8 }}>Try one of these</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {chips.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => onPick(p.a.id, p.b.id)}
+            title={p.why || undefined}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: RADIUS.md,
+              background: 'rgba(255,255,255,0.04)', border: `1px solid ${HAIR}`, color: TEXT_1, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.borderColor = `${GOLD}66`)}
+            onMouseLeave={(e) => (e.currentTarget.style.borderColor = HAIR)}
+          >
+            {p.a.name} and {p.b.name}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -318,7 +365,7 @@ function EntityChip({ node, types, accent, onClear }) {
 /* ------------------------------- prompt / empty ------------------------------- */
 function Prompt({ from, to, sameEntity }) {
   let msg = 'Pick two names above to trace the connection between them.';
-  if (sameEntity) msg = 'That is the same entity on both sides — pick two different names.';
+  if (sameEntity) msg = 'That is the same name twice. Pick two different entities.';
   else if (from && !to) msg = 'Now pick a second name to trace the route to.';
   else if (!from && to) msg = 'Now pick the first name to trace the route from.';
   return (
@@ -340,7 +387,7 @@ function NoPath({ thresh, from, to, onLower }) {
       </div>
       <p style={{ fontSize: 13.5, color: '#E8C7BC', lineHeight: 1.55, margin: '0 0 14px' }}>
         {atZero ? (
-          <>There is no route between <b style={{ color: TEXT }}>{from.name}</b> and <b style={{ color: TEXT }}>{to.name}</b> through any link we hold — even the weakest. They are not connected in the registers loaded so far. That can change as new sources are added.</>
+          <>There is no route between <b style={{ color: TEXT }}>{from.name}</b> and <b style={{ color: TEXT }}>{to.name}</b> in any register we hold, even at the weakest link. That can change as sources are added.</>
         ) : (
           <>A route may still exist through lower-confidence links. Include weaker links to widen the search.</>
         )}
@@ -381,24 +428,25 @@ function PathResult({ path, hops, pathGraph, summary, types, nodeById, onOpenEnt
         </div>
       )}
 
-      {/* confidence legend — how to read the per-hop % below */}
+      {/* confidence legend — how to read the per-hop stamps below */}
       <ConfidenceLegend />
 
-      {/* left-to-right sourced chain (wraps on mobile) */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'stretch', gap: 10, rowGap: 16 }}>
+      {/* vertical evidence chain: node pill, then an indented connector card carrying
+          the hop's fact + confidence stamp, at every breakpoint (no horizontal wrap). */}
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
         {path.map((id, i) => {
           const node = nodeById[id];
           const hop = i < hops.length ? hops[i] : null;
           return (
             <React.Fragment key={`${id}-${i}`}>
-              <NodePill node={node} types={types} onOpen={() => onOpenEntity(id)} />
-              {hop && <HopConnector hop={hop} />}
+              <EvidenceNode node={node} onOpen={() => onOpenEntity(id)} types={types} />
+              {hop && <EvidenceConnector hop={hop} />}
             </React.Fragment>
           );
         })}
       </div>
 
-      {/* the route as a small picture */}
+      {/* the route as a small picture, below the chain */}
       <div style={{ marginTop: 26 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
           <h2 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>The route</h2>
@@ -426,7 +474,8 @@ function PathResult({ path, hops, pathGraph, summary, types, nodeById, onOpenEnt
   );
 }
 
-function NodePill({ node, types, onOpen }) {
+/* a node in the vertical evidence chain: type glyph + name, clickable to its dossier. */
+function EvidenceNode({ node, types, onOpen }) {
   if (!node) return null;
   const col = typeColor(node.type, types);
   const Icon = typeIcon(node.type, types);
@@ -435,18 +484,18 @@ function NodePill({ node, types, onOpen }) {
       onClick={onOpen}
       title={node.role}
       style={{
-        display: 'flex', alignItems: 'center', gap: 9, padding: '10px 13px', borderRadius: 12, cursor: 'pointer',
-        background: 'rgba(255,255,255,0.04)', border: `1px solid ${col}55`, color: TEXT, maxWidth: 220, flex: '0 0 auto',
+        display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderRadius: RADIUS.md, cursor: 'pointer',
+        background: 'rgba(255,255,255,0.04)', border: `1px solid ${col}55`, color: TEXT, width: '100%', textAlign: 'left',
       }}
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = `${col}aa`)}
       onMouseLeave={(e) => (e.currentTarget.style.borderColor = `${col}55`)}
     >
-      <span style={{ width: 26, height: 26, borderRadius: 8, display: 'grid', placeItems: 'center', flex: '0 0 auto', background: `${col}22`, border: `1px solid ${col}55` }}>
-        <Icon size={14} color={col} />
+      <span style={{ width: 28, height: 28, borderRadius: RADIUS.sm, display: 'grid', placeItems: 'center', flex: '0 0 auto', background: `${col}22`, border: `1px solid ${col}55` }}>
+        <Icon size={15} color={col} />
       </span>
-      <span style={{ minWidth: 0, textAlign: 'left' }}>
-        <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{node.name}</span>
-        {node.conflict && <span style={{ display: 'block', fontFamily: MONO, fontSize: 8.5, letterSpacing: '.08em', textTransform: 'uppercase', color: VERM, opacity: node.conflictStrength === 'low' ? 0.55 : 1 }}>merits a look</span>}
+      <span style={{ minWidth: 0 }}>
+        <span style={{ ...TYPO.title3, display: 'block', color: TEXT_1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{node.name}</span>
+        {node.conflict && <span style={{ display: 'block', fontFamily: MONO, fontSize: 8.5, letterSpacing: '.08em', textTransform: 'uppercase', color: VERM, opacity: node.conflictStrength === 'low' ? 0.55 : 1, marginTop: 2 }}>merits a look</span>}
       </span>
     </button>
   );
@@ -472,30 +521,49 @@ function ConfidenceLegend() {
   );
 }
 
-/* the `—[ rel · amount? · conf% ]→` connector with the source beneath. */
-function HopConnector({ hop }) {
+/* the connector card between two chain nodes: a left rail (solid for Established/
+   Probable, dashed for Lead, coloured by tier), the hop's fact (rel + amount), a
+   squared confidence stamp, and the source method. */
+function EvidenceConnector({ hop }) {
   const { link } = hop;
   if (!link) {
     // shouldn't happen on a real path, but render an honest placeholder
     return (
-      <div style={{ display: 'flex', alignItems: 'center', alignSelf: 'center', flex: '0 0 auto', color: MUTE, fontFamily: MONO, fontSize: 11 }}>
-        —[ linked ]→
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0 10px 14px', color: MUTE, fontFamily: MONO, fontSize: 11 }}>
+        <span style={{ width: 2, alignSelf: 'stretch', background: HAIR, flex: '0 0 auto' }} />
+        linked
       </div>
     );
   }
+  const tier = confTier(link.confidence);
   const pct = Math.round(link.confidence * 100);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, flex: '0 0 auto', alignSelf: 'center', minWidth: 96 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: MONO, fontSize: 11.5, color: '#B9C2D8' }}>
-        <span style={{ color: MUTE }}>—[</span>
-        <span style={{ color: '#D7DEEE', fontWeight: 600 }}>{link.rel}</span>
-        {link.amount && <><span style={{ color: 'rgba(190,200,230,0.3)' }}>·</span><span style={{ color: GOLD }}>{link.amount}</span></>}
-        <span style={{ color: 'rgba(190,200,230,0.3)' }}>·</span>
-        <span style={{ color: confColor(link.confidence), fontWeight: 700 }}>{pct}%</span>
-        <span style={{ color: MUTE }}>]→</span>
-      </div>
-      <div style={{ fontFamily: MONO, fontSize: 9.5, color: MUTE, opacity: 0.85, maxWidth: 160, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        via {link.method}
+    <div style={{ display: 'flex', gap: 14, padding: '10px 0 10px 3px' }}>
+      {/* the vertical rail: solid in tier colour for Established/Probable, dashed for Lead */}
+      <div
+        style={{
+          width: 2, alignSelf: 'stretch', flex: '0 0 auto', marginLeft: 11,
+          background: tier.solid ? tier.color : 'transparent',
+          borderLeft: tier.solid ? 'none' : `2px dashed ${tier.color}`,
+        }}
+      />
+      <div style={{ flex: 1, minWidth: 0, padding: '10px 14px', borderRadius: RADIUS.md, background: 'rgba(255,255,255,0.025)', border: `1px solid ${HAIR}` }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ ...TYPO.bodySm, color: TEXT_1, fontWeight: 600 }}>{link.rel}</span>
+          {link.amount && <span style={{ ...TYPO.bodySm, color: GOLD, fontWeight: 600 }}>{link.amount}</span>}
+          <span
+            style={{
+              ...TYPO.dataLabel, color: tier.color, background: `${tier.color}1a`, border: `1px solid ${tier.color}55`,
+              borderRadius: RADIUS.xs, padding: '2px 7px', marginLeft: 'auto',
+            }}
+          >
+            {tier.label} · {pct}%
+          </span>
+        </div>
+        <div style={{ marginTop: 6 }}>
+          <span style={{ ...TYPO.dataLabel }}>Via </span>
+          <span style={{ ...TYPO.dataValue, color: TEXT_2 }}>{link.method}</span>
+        </div>
       </div>
     </div>
   );

@@ -195,7 +195,7 @@ function ConflictBanner({ node }) {
       <div>
         <div style={{ fontSize: 11, fontWeight: 700, color: low ? '#AEB4C0' : '#F0A593', letterSpacing: '.12em', textTransform: 'uppercase' }}>Conflict-shaped · {head} · merits a look</div>
         {node.conflictReason && <div style={{ fontSize: 14, color: low ? '#C7CBD3' : '#E8C7BC', lineHeight: 1.55, marginTop: 6 }}>{node.conflictReason}</div>}
-        <div style={{ fontSize: 11.5, color: MUTE, marginTop: 8, lineHeight: 1.5 }}>A structural overlap drawn from public records — not an allegation of wrongdoing.</div>
+        <div style={{ fontSize: 11.5, color: MUTE, marginTop: 8, lineHeight: 1.5 }}>A structural overlap drawn from public records. It is a prompt to look, not an allegation.</div>
       </div>
     </div>
   );

@@ -13,9 +13,10 @@
  * is code-split so it never weighs down the landing.
  */
 import React, { useMemo, useState, useRef, useEffect, lazy, Suspense } from 'react';
-import { MagnifyingGlass, X, Graph, ArrowLeft, BookOpenText, Path, CaretRight } from '@phosphor-icons/react';
+import { MagnifyingGlass, X, Graph, BookOpenText, Path, ListMagnifyingGlass } from '@phosphor-icons/react';
 import {
   GOLD, VERM, TEXT, MUTE, HAIR, PANEL, MONO, SANS, BG,
+  TYPO, TEXT_1, TEXT_2, BRASS,
   typeColor,
 } from '@/lib/graph-utils';
 import HomeView from './views/HomeView';
@@ -118,6 +119,42 @@ export default function OrreryApp({ nodes, links, types, findings, pairs }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes]);
 
+  /* document.title per view, so a shared tab/bookmark reads sensibly. */
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (view === 'entity' && entityId && nodeById[entityId]) {
+      document.title = `${nodeById[entityId].name} · ORRERY`;
+    } else if (view === 'connect') {
+      document.title = 'Connection · ORRERY';
+    } else if (view === 'explore') {
+      document.title = 'Full network · ORRERY';
+    } else {
+      document.title = 'ORRERY';
+    }
+  }, [view, entityId, nodeById]);
+
+  // which header tab reads as active for the current view (home + entity both live under Findings)
+  const activeTab = view === 'connect' ? 'connect' : view === 'explore' ? 'explore' : 'findings';
+
+  // breadcrumb trail for every non-home view
+  const crumbs = useMemo(() => {
+    if (view === 'entity' && entityId && nodeById[entityId]) {
+      return [
+        { label: 'Findings', onClick: openHome },
+        { label: 'Dossier' },
+        { label: nodeById[entityId].name },
+      ];
+    }
+    if (view === 'connect') {
+      return [{ label: 'Findings', onClick: openHome }, { label: 'Connection' }];
+    }
+    if (view === 'explore') {
+      return [{ label: 'Findings', onClick: openHome }, { label: 'Full network' }];
+    }
+    return null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, entityId, nodeById]);
+
   const isExplore = view === 'explore';
   return (
     <div
@@ -130,12 +167,13 @@ export default function OrreryApp({ nodes, links, types, findings, pairs }) {
       <Header
         ranked={ranked}
         types={types}
+        activeTab={activeTab}
         onPick={openEntity}
         onHome={openHome}
         onExplore={() => openExplore(null)}
         onConnect={() => goConnect(null)}
       />
-      {isExplore && <Breadcrumb items={[{ label: 'Findings', onClick: openHome }, { label: 'Full network' }]} />}
+      {crumbs && <Breadcrumb items={crumbs} />}
       <main style={{ flex: 1, width: '100%', display: isExplore ? 'flex' : 'block', minHeight: 0 }}>
         {view === 'explore' && (
           <Suspense
@@ -190,6 +228,7 @@ export default function OrreryApp({ nodes, links, types, findings, pairs }) {
             nodes={nodes}
             links={links}
             types={types}
+            pairs={pairsSafe}
             onOpenEntity={openEntity}
             onBack={openHome}
             initialFromId={connectFrom}
@@ -201,10 +240,11 @@ export default function OrreryApp({ nodes, links, types, findings, pairs }) {
 }
 
 /* ----------------------------- shared header ----------------------------- */
-function Header({ ranked, types, onPick, onHome, onExplore, onConnect }) {
+function Header({ ranked, types, activeTab, onPick, onHome, onExplore, onConnect }) {
   const [q, setQ] = useState('');
   const [open, setOpen] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [searchOpenSm, setSearchOpenSm] = useState(false);
   const boxRef = useRef(null);
 
   const results = useMemo(() => {
@@ -219,7 +259,7 @@ function Header({ ranked, types, onPick, onHome, onExplore, onConnect }) {
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
 
-  const pick = (id) => { onPick(id); setQ(''); setOpen(false); };
+  const pick = (id) => { onPick(id); setQ(''); setOpen(false); setSearchOpenSm(false); };
 
   return (
     <header
@@ -232,19 +272,37 @@ function Header({ ranked, types, onPick, onHome, onExplore, onConnect }) {
     >
       <button
         onClick={onHome}
-        title="ORRERY — home"
-        style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: TEXT }}
+        title="ORRERY home"
+        style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: TEXT, flex: '0 0 auto' }}
       >
         <BrandMark />
         <span style={{ lineHeight: 1, textAlign: 'left' }}>
           <span style={{ display: 'block', fontWeight: 800, letterSpacing: '.15em', fontSize: 15 }}>ORRERY</span>
-          <span style={{ display: 'block', fontFamily: MONO, fontSize: 9.5, letterSpacing: '.2em', textTransform: 'uppercase', color: MUTE, marginTop: 2 }}>influence, mapped</span>
         </span>
       </button>
 
-      {/* global search — suggests entities, jumps to the dossier on select */}
-      <div ref={boxRef} style={{ position: 'relative', flex: 1, maxWidth: 460, marginLeft: 'auto' }}>
-        <div style={{ position: 'relative' }}>
+      {/* text tabs: Findings / Connect / Explore — active tab gets a brass underline flush with the header's bottom border */}
+      <nav style={{ display: 'flex', alignItems: 'stretch', height: '100%', gap: 2, marginLeft: 4 }}>
+        <TabButton label="Findings" Icon={ListMagnifyingGlass} active={activeTab === 'findings'} onClick={onHome} />
+        <TabButton label="Connect" Icon={Path} active={activeTab === 'connect'} onClick={onConnect} />
+        <TabButton label="Explore" Icon={Graph} active={activeTab === 'explore'} onClick={onExplore} />
+      </nav>
+
+      {/* global search — suggests entities, jumps to the dossier on select. Collapses to an
+          icon button below 560px; the input expands over the header on tap (labels never hide). */}
+      <div ref={boxRef} className={`hdr-search${searchOpenSm ? ' hdr-search--open' : ''}`} style={{ position: 'relative', flex: 1, maxWidth: 460, marginLeft: 'auto' }}>
+        <button
+          className="hdr-search-toggle"
+          onClick={() => setSearchOpenSm((v) => !v)}
+          aria-label="Search a person, company or party"
+          style={{
+            display: 'none', width: 36, height: 36, borderRadius: 9, alignItems: 'center', justifyContent: 'center',
+            background: 'rgba(255,255,255,0.05)', border: `1px solid ${HAIR}`, color: MUTE, cursor: 'pointer', marginLeft: 'auto',
+          }}
+        >
+          <MagnifyingGlass size={16} />
+        </button>
+        <div className="hdr-search-box" style={{ position: 'relative' }}>
           <MagnifyingGlass size={15} color={MUTE} style={{ position: 'absolute', left: 11, top: 10 }} />
           <input
             value={q}
@@ -295,26 +353,6 @@ function Header({ ranked, types, onPick, onHome, onExplore, onConnect }) {
       </div>
 
       <button
-        onClick={onConnect}
-        title="Find the connection between two names"
-        style={{
-          display: 'flex', alignItems: 'center', gap: 7, height: 36, padding: '0 12px', borderRadius: 9,
-          background: 'rgba(255,255,255,0.05)', border: `1px solid ${HAIR}`, color: MUTE, cursor: 'pointer', fontSize: 13, fontWeight: 600, flex: '0 0 auto',
-        }}
-      >
-        <Path size={16} /> <span className="hide-sm">Connect</span>
-      </button>
-      <button
-        onClick={onExplore}
-        title="Open the full network"
-        style={{
-          display: 'flex', alignItems: 'center', gap: 7, height: 36, padding: '0 12px', borderRadius: 9,
-          background: 'rgba(255,255,255,0.05)', border: `1px solid ${HAIR}`, color: MUTE, cursor: 'pointer', fontSize: 13, fontWeight: 600, flex: '0 0 auto',
-        }}
-      >
-        <Graph size={16} /> <span className="hide-sm">Explore</span>
-      </button>
-      <button
         onClick={() => setShowHelp(true)}
         title="How to read ORRERY"
         aria-label="How to read ORRERY"
@@ -331,32 +369,55 @@ function Header({ ranked, types, onPick, onHome, onExplore, onConnect }) {
   );
 }
 
+/* a single header tab: glyph + label, active = TEXT_1 + a 2px brass underline
+   flush with the header's own bottom border; inactive = TEXT_2, hover = TEXT_1. */
+function TabButton({ label, Icon, active, onClick }) {
+  const [hover, setHover] = useState(false);
+  const color = active || hover ? TEXT_1 : TEXT_2;
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      aria-current={active ? 'page' : undefined}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 7, padding: '0 12px', height: '100%',
+        background: 'none', border: 'none', borderBottom: active ? `2px solid ${BRASS}` : '2px solid transparent',
+        color, cursor: 'pointer', fontSize: 13.5, fontWeight: 600, fontFamily: SANS,
+      }}
+    >
+      <Icon size={15} weight="regular" />
+      <span>{label}</span>
+    </button>
+  );
+}
+
 /* breadcrumb row under the header on non-Home views — everything clickable but the
-   current page. Keeps Explore feeling like part of the same site, not a separate one. */
+   current page. Keeps every view feeling like part of the same site. */
 function Breadcrumb({ items }) {
   return (
     <div
       style={{
         flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px',
-        borderBottom: `1px solid ${HAIR}`, background: 'rgba(9,12,22,0.6)', fontFamily: MONO, fontSize: 11.5,
+        borderBottom: `1px solid ${HAIR}`, background: 'rgba(9,12,22,0.6)',
       }}
     >
       {items.map((it, i) => {
         const last = i === items.length - 1;
         return (
           <React.Fragment key={it.label}>
-            {i > 0 && <CaretRight size={10} color={MUTE} style={{ flex: '0 0 auto', opacity: 0.6 }} />}
+            {i > 0 && <span style={{ ...TYPO.caption, color: TEXT_2, flex: '0 0 auto' }}>›</span>}
             {it.onClick && !last ? (
               <button
                 onClick={it.onClick}
-                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: MUTE, fontFamily: MONO, fontSize: 11.5, letterSpacing: '.02em' }}
+                style={{ ...TYPO.caption, background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: TEXT_2 }}
                 onMouseEnter={(e) => (e.currentTarget.style.color = GOLD)}
                 onMouseLeave={(e) => (e.currentTarget.style.color = MUTE)}
               >
                 {it.label}
               </button>
             ) : (
-              <span style={{ color: last ? TEXT : MUTE, letterSpacing: '.02em' }}>{it.label}</span>
+              <span style={{ ...TYPO.caption, color: last ? TEXT_1 : TEXT_2 }}>{it.label}</span>
             )}
           </React.Fragment>
         );
@@ -394,10 +455,10 @@ function HelpSheet({ onClose }) {
         </ul>
 
         <HelpHead>What “merits a look” means</HelpHead>
-        <HelpPara>A structural overlap drawn from those records — for instance an MP who sits on a committee overseeing a sector while also directing a company in it. We show the overlap with its receipts and rank how closely the two sides align. It is a prompt to look, never an allegation.</HelpPara>
+        <HelpPara>A structural overlap drawn from those records: for instance an MP who sits on a committee overseeing a sector while also directing a company in it. We show the overlap with its receipts and rank how closely the two sides align. It is a prompt to look, never an allegation.</HelpPara>
 
         <HelpHead>Confidence, and strength</HelpHead>
-        <HelpPara><b style={{ color: GOLD }}>Confidence</b> is how sure we are a link is real and correctly identified — a shared Companies House number is near-certain; a name-only match is weaker and shown as such. <b style={{ color: GOLD }}>Strength</b> is how meaningful the tie is once it's real. Links established on an official identifier render solid; anything inferred renders dotted, and nothing uncertain about a named person is ever stated as fact.</HelpPara>
+        <HelpPara><b style={{ color: GOLD }}>Confidence</b> is how sure we are a link is real and correctly identified. A shared Companies House number is near-certain; a name-only match is weaker and shown as such. <b style={{ color: GOLD }}>Strength</b> is how meaningful the tie is once it's real. Links established on an official identifier render solid; anything inferred renders dotted, and nothing uncertain about a named person is ever stated as fact.</HelpPara>
 
         <HelpPara><b style={{ color: GOLD }}>Explore</b> opens the full network for the curious — but you never need it to get an answer.</HelpPara>
         <div style={{ padding: '11px 13px', borderRadius: 10, background: 'rgba(229,101,75,0.08)', border: '1px solid rgba(229,101,75,0.25)', fontSize: 12.5, color: '#F0A593', lineHeight: 1.55 }}>
@@ -419,7 +480,7 @@ function SourceItem({ name, children }) {
   return (
     <li style={{ fontSize: 13, lineHeight: 1.5, color: '#C7CEDF', paddingLeft: 13, position: 'relative' }}>
       <span style={{ position: 'absolute', left: 0, top: 7, width: 5, height: 5, borderRadius: '50%', background: GOLD, opacity: 0.7 }} />
-      <b style={{ color: '#E7ECF7', fontWeight: 700 }}>{name}</b> — {children}
+      <b style={{ color: '#E7ECF7', fontWeight: 700 }}>{name}</b>: {children}
     </li>
   );
 }
@@ -458,7 +519,18 @@ function GlobalStyle() {
       .eb { font-family: ${MONO}; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: ${MUTE}; }
       .in { animation: fin .3s ease both; }
       @keyframes fin { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-      @media (max-width: 560px) { .hide-sm { display: none; } }
+      /* below 560px the header search collapses to an icon button that expands on tap;
+         tab labels never hide at any width. */
+      @media (max-width: 560px) {
+        .hdr-search-toggle { display: flex !important; }
+        .hdr-search-box { display: none; }
+        .hdr-search { flex: 0 0 auto !important; max-width: none !important; }
+        .hdr-search--open {
+          position: fixed !important; top: 8px; left: 8px; right: 8px; z-index: 60; max-width: none !important;
+        }
+        .hdr-search--open .hdr-search-toggle { display: none !important; }
+        .hdr-search--open .hdr-search-box { display: block; }
+      }
     `}</style>
   );
 }
