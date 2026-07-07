@@ -58,6 +58,33 @@ const TYPE_REGISTER: Record<string, string> = {
   MINISTERIAL_ROLE: "Parliament",
 };
 
+/* Paginated fetch, all pages CONCURRENTLY. The sequential page walk was the whole
+   first-paint cost at 11k+ rows (~30 round trips end to end); count first, then fire
+   every range at once. Pages are kept deterministic by always ordering (explicitly, or
+   by the first selected column) so parallel ranges never skip or duplicate rows. */
+const PAGE_SIZE = 1000;
+async function fetchAllParallel(table: string, columns: string, order?: string): Promise<any[]> {
+  const firstCol = columns.split(",")[0].trim();
+  const head = await supabase.from(table).select(firstCol, { count: "exact", head: true });
+  if (head.error) throw head.error;
+  const total = head.count ?? 0;
+  if (total === 0) return [];
+  const pages = Math.ceil(total / PAGE_SIZE);
+  const results = await Promise.all(
+    Array.from({ length: pages }, (_, i) => {
+      let q = supabase.from(table).select(columns).range(i * PAGE_SIZE, (i + 1) * PAGE_SIZE - 1);
+      q = order ? q.order(order, { ascending: false }) : q.order(firstCol, { ascending: true });
+      return q;
+    }),
+  );
+  const out: any[] = [];
+  for (const r of results) {
+    if (r.error) throw r.error;
+    out.push(...(r.data ?? []));
+  }
+  return out;
+}
+
 /**
  * Reads the resolved graph (canonical entities + scored statements) from Supabase
  * and maps it into the {nodes, links, types} the force-graph UI expects. Read-only,
@@ -68,19 +95,8 @@ export async function loadGraph(): Promise<{
   links: GraphLink[];
   types: TypeConfig;
 }> {
-  // Supabase/PostgREST caps a single response at 1,000 rows — page through the entity + statement
-  // tables (both exceed that at full-Commons scale) so the graph is never silently truncated.
-  const fetchAll = async (table: string, columns: string): Promise<any[]> => {
-    const out: any[] = [];
-    const size = 1000;
-    for (let from = 0; ; from += size) {
-      const { data, error } = await supabase.from(table).select(columns).range(from, from + size - 1);
-      if (error) throw error;
-      out.push(...(data ?? []));
-      if (!data || data.length < size) break;
-    }
-    return out;
-  };
+  // Supabase/PostgREST caps a single response at 1,000 rows; fetch all pages concurrently.
+  const fetchAll = fetchAllParallel;
   const [entsRows, stmtsRows, stypes, etypes] = await Promise.all([
     fetchAll("canonical_entities", "id, entity_type, canonical_name, display_name, category, attributes"),
     fetchAll("statements", "id, subject_entity_id, object_entity_id, statement_type, confidence, strength, attributes"),
@@ -183,19 +199,7 @@ export type SuggestedPair = {
  * defensively like `loadGraph`, though at ~494 rows a single fetch would already suffice.
  */
 export async function loadFindings(): Promise<{ findings: Finding[]; pairs: SuggestedPair[] }> {
-  const fetchAll = async (table: string, columns: string, order?: string): Promise<any[]> => {
-    const out: any[] = [];
-    const size = 1000;
-    for (let from = 0; ; from += size) {
-      let q = supabase.from(table).select(columns).range(from, from + size - 1);
-      if (order) q = q.order(order, { ascending: false });
-      const { data, error } = await q;
-      if (error) throw error;
-      out.push(...(data ?? []));
-      if (!data || data.length < size) break;
-    }
-    return out;
-  };
+  const fetchAll = fetchAllParallel;
 
   const [findingRows, pairRows] = await Promise.all([
     fetchAll(
@@ -257,17 +261,7 @@ export async function loadInsights(): Promise<{
   insightsByEntity: Record<string, Insight[]>;
   stats: Record<string, RegisterStat>;
 }> {
-  const fetchAll = async (table: string, columns: string): Promise<any[]> => {
-    const out: any[] = [];
-    const size = 1000;
-    for (let from = 0; ; from += size) {
-      const { data, error } = await supabase.from(table).select(columns).range(from, from + size - 1);
-      if (error) throw error;
-      out.push(...(data ?? []));
-      if (!data || data.length < size) break;
-    }
-    return out;
-  };
+  const fetchAll = fetchAllParallel;
 
   const [insightRows, statRows] = await Promise.all([
     fetchAll("entity_insights", "id, entity_id, kind, priority, rank, cohort_size, slots, computed_at"),
