@@ -26,6 +26,7 @@
 
 truncate table public.findings;
 truncate table public.suggested_pairs;
+truncate table public.overseas_leads;
 
 -- ------------------------------------------------------------------------------------------------
 -- 0) Shared scaffolding: degree (non-hub-typed neighbour count) and idf per entity, and a
@@ -340,7 +341,10 @@ cand as (
     array[b.donor_id, b.recipient_id] as member_entity_ids,
     array[b.stmt_id] as member_statement_ids,
     jsonb_build_object('donor', donor.canonical_name, 'recipient', recip.canonical_name,
-                        'amount_gbp', b.amount) as slots,
+                        'amount_gbp', b.amount)
+      || case when donor.attributes ? 'jurisdiction'
+              then jsonb_build_object('donor_jurisdiction', donor.attributes->>'jurisdiction')
+              else '{}'::jsonb end as slots,
     b.amount as total_gbp,
     b.confidence as min_confidence
   from big b
@@ -368,6 +372,71 @@ select
   round(least(1.0, log(10.0, 1 + s.total_gbp) / 6.0)::numeric, 4),
   0.6,
   round((0.6 * (0.4 + 0.6 * coalesce(s.rarity, 0))
+         * (1 + 0.5 * greatest(0, coalesce(s.n_registers, 1) - 1))
+         * (0.5 + 0.5 * least(1.0, log(10.0, 1 + s.total_gbp) / 6.0)))::numeric, 4),
+  round(s.min_confidence::numeric, 4),
+  s.min_confidence < 0.80,
+  now()
+from scored s
+where s.min_confidence >= 0.50;
+
+-- ==================================================================================================
+-- OVERSEAS_MONEY -- a DONATED_TO statement whose donor rolled-up jurisdiction (enrich_v1.sql,
+-- Companies House residence/registration only, never invented) is present and not GB. Purely
+-- deterministic: "overseas-linked" here is a factual descriptor of a registered residence or
+-- registration, never an insinuation (CLAUDE.md THE LINE). shape_weight 0.95 -- these lead the
+-- ranking. An EC donor and a same-named CH officer are NOT the same entity unless dedupe_v1
+-- already merged them on a shared neighbour or DOB match, a same-name-only coincidence never
+-- reaches this shape, it is a dotted lead in overseas_leads instead (below).
+-- ==================================================================================================
+with od as (
+  select s.id as stmt_id, s.subject_entity_id as donor_id, s.object_entity_id as recipient_id,
+         (s.attributes->>'amount_gbp')::numeric as amount, s.confidence,
+         donor.attributes->>'jurisdiction' as jurisdiction
+  from public.statements s
+  join public.canonical_entities donor on donor.id = s.subject_entity_id
+  where s.statement_type = 'DONATED_TO'
+    and s.attributes ? 'amount_gbp'
+    and donor.attributes ? 'jurisdiction'
+    and donor.attributes->>'jurisdiction' <> 'GB'
+),
+cand as (
+  select
+    'OVERSEAS_MONEY' as shape_code,
+    array[od.donor_id, od.recipient_id] as member_entity_ids,
+    array[od.stmt_id] as member_statement_ids,
+    jsonb_build_object(
+      'donor', donor.canonical_name, 'recipient', recip.canonical_name,
+      'amount_gbp', od.amount, 'jurisdiction', od.jurisdiction,
+      'basis', 'Companies House registered residence'
+    ) as slots,
+    od.amount as total_gbp,
+    od.confidence as min_confidence
+  from od
+  join public.canonical_entities donor on donor.id = od.donor_id
+  join public.canonical_entities recip on recip.id = od.recipient_id
+),
+scored as (
+  select c.*,
+    (select exp(avg(ln(nullif(ti.idf, 0))))
+       from unnest(c.member_entity_ids) me
+       join public.canonical_entities ent on ent.id = me and ent.entity_type not in (select entity_type from tmp_hub_types)
+       join tmp_idf ti on ti.id = me) as rarity,
+    (select count(distinct ss.src) from unnest(c.member_statement_ids) msid
+       join tmp_stmt_sources ss on ss.statement_id = msid) as n_registers
+  from cand c
+)
+insert into public.findings
+  (id, shape_code, member_entity_ids, member_statement_ids, slots,
+   rarity, corroboration, money, shape_weight, surprise, min_confidence, is_lead, computed_at)
+select
+  md5(s.shape_code || '|' || (select string_agg(x::text, ',' order by x) from unnest(s.member_entity_ids) x)),
+  s.shape_code, s.member_entity_ids, s.member_statement_ids, s.slots,
+  round(coalesce(s.rarity, 0)::numeric, 4),
+  round((1 + 0.5 * greatest(0, coalesce(s.n_registers, 1) - 1))::numeric, 4),
+  round(least(1.0, log(10.0, 1 + s.total_gbp) / 6.0)::numeric, 4),
+  0.95,
+  round((0.95 * (0.4 + 0.6 * coalesce(s.rarity, 0))
          * (1 + 0.5 * greatest(0, coalesce(s.n_registers, 1) - 1))
          * (0.5 + 0.5 * least(1.0, log(10.0, 1 + s.total_gbp) / 6.0)))::numeric, 4),
   round(s.min_confidence::numeric, 4),
@@ -680,3 +749,56 @@ select
 from ranked r
 order by total_degree asc nulls last
 limit 40;
+
+-- ==================================================================================================
+-- overseas_leads -- the disclaimed, dotted Harborne-shaped lead (Wave A.3). An EC donor (person)
+-- with total declared donations >= GBP 250,000 whose exact name-key -- the SAME sorted-token,
+-- title-stripped key dedupe_v1.sql already computed into tmp_pkey -- matches a DIFFERENT person
+-- canonical entity carrying a non-GB attributes->>jurisdiction (enrich_v1.sql, Companies House
+-- residence only). tmp_pkey is still in scope here: recompute.py runs the whole BUILD list in one
+-- transaction and tmp_pkey is "on commit drop", not dropped per statement or per file (the same
+-- reuse insights_v1.sql documents for tmp_hub_types/tmp_degree/tmp_stmt_sources, both created in
+-- THIS file). NEVER a merge, NEVER a finding, NEVER a statement: a shared name alone is not an
+-- identification (THE LINE, CLAUDE.md) -- this table is exactly the sanctioned dotted-lead
+-- mechanism, rendered disclaimed ("names can coincide") on the donor dossier and the related
+-- BIG_MONEY finding page.
+-- ==================================================================================================
+with donor_totals as (
+  select s.subject_entity_id as donor_id,
+         sum((s.attributes->>'amount_gbp')::numeric) as total_gbp
+  from public.statements s
+  join public.canonical_entities donor on donor.id = s.subject_entity_id and donor.entity_type = 'person'
+  where s.statement_type = 'DONATED_TO' and s.attributes ? 'amount_gbp'
+  group by s.subject_entity_id
+  having sum((s.attributes->>'amount_gbp')::numeric) >= 250000
+),
+top_recipient as (
+  select distinct on (s.subject_entity_id) s.subject_entity_id as donor_id,
+         recip.canonical_name as recipient_name,
+         (s.attributes->>'amount_gbp')::numeric as amount_gbp
+  from public.statements s
+  join public.canonical_entities recip on recip.id = s.object_entity_id
+  where s.statement_type = 'DONATED_TO' and s.attributes ? 'amount_gbp'
+  order by s.subject_entity_id, (s.attributes->>'amount_gbp')::numeric desc
+),
+matches as (
+  select dt.donor_id, donor.canonical_name as donor_name,
+         tr.recipient_name, tr.amount_gbp,
+         officer.id as officer_entity_id, officer.canonical_name as officer_name,
+         officer.attributes->>'jurisdiction' as country
+  from donor_totals dt
+  join public.canonical_entities donor on donor.id = dt.donor_id
+  join tmp_pkey dpk on dpk.id = dt.donor_id and dpk.namekey <> ''
+  join tmp_pkey opk on opk.namekey = dpk.namekey and opk.id <> dpk.id
+  join public.canonical_entities officer on officer.id = opk.id
+    and officer.entity_type = 'person'
+    and officer.attributes ? 'jurisdiction'
+    and officer.attributes->>'jurisdiction' <> 'GB'
+  left join top_recipient tr on tr.donor_id = dt.donor_id
+)
+insert into public.overseas_leads
+  (id, donor_entity_id, donor_name, officer_name, country, amount_gbp, recipient, computed_at)
+select
+  md5('OVERSEAS_LEAD|' || m.donor_id::text || '|' || m.officer_entity_id::text),
+  m.donor_id, m.donor_name, m.officer_name, m.country, m.amount_gbp, m.recipient_name, now()
+from matches m;

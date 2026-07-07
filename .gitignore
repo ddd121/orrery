@@ -40,6 +40,7 @@ supabase/.temp/
 # ── Local data dumps + generated SQL (not committed) ─
 data/
 .scratch/
+pipeline/.cache/
 
 # ── OS / editor ─────────────────────────────────────────────
 .DS_Store

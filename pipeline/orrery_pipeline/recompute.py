@@ -31,12 +31,15 @@ from urllib.parse import unquote, urlparse
 
 HERE = Path(__file__).resolve().parent
 
-# resolution -> graph-aware dedup -> edges -> scrutiny -> §7 conflict motifs. Order matters:
-# dedupe_v1 collapses duplicate canonical entities (§4.4 shared-neighbour pass) that resolve_v3
-# left split, so edges_v2 builds statements over the merged set.
+# resolution -> graph-aware dedup -> jurisdiction enrichment -> edges -> scrutiny -> §7 conflict
+# motifs. Order matters: dedupe_v1 collapses duplicate canonical entities (§4.4 shared-neighbour
+# pass) that resolve_v3 left split, so edges_v2 builds statements over the merged set; enrich_v1
+# rolls up jurisdiction/nationality onto that same merged set, before findings_v1 reads it for the
+# OVERSEAS_MONEY shape and overseas_leads.
 BUILD = [
     HERE / "resolution" / "resolve_v3.sql",
     HERE / "resolution" / "dedupe_v1.sql",
+    HERE / "resolution" / "enrich_v1.sql",
     HERE / "graph" / "edges_v2.sql",
     HERE / "graph" / "scrutiny_v1.sql",
     HERE / "graph" / "motifs_v2.sql",
@@ -143,6 +146,15 @@ def main(argv: list[str]) -> int:
     finally:
         con.close()
     print("done.")
+    if mode == "build":
+        if os.environ.get("SKIP_NEWS") == "1":
+            print("SKIP_NEWS=1: skipping the news coverage step")
+        else:
+            try:
+                from .ingestion.news_coverage import main as news_main
+                news_main([])
+            except Exception as e:  # best-effort: network/GDELT trouble never fails the build
+                print(f"warning: news coverage step failed (non-fatal): {e}")
     return 0
 
 
