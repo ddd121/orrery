@@ -19,6 +19,15 @@ TieRow gauge -> fact line), W3 the **Cutting** (1200x630 share image), finding p
 Ledger, W4 shell (tabs/breadcrumbs/titles, Connect vertical chain + suggested pairs, dash purge).
 Main loop is now **Fable 5** (Roy's /model switch); Sonnet codes chunks; announce routing + cost.
 
+**2026-07-06 (later) — "The Front Page" push in flight** (plan in the plans file; acceptance test =
+the live Farage/Harborne story: Harborne is ALREADY our largest Reform UK donor at £9m, EC-sourced).
+Waves: A international layer (jurisdiction rollup from CH raw attrs already captured; OVERSEAS_MONEY
+shape deterministic-only; overseas_leads + ICIJ offshore_leads as DOTTED LEADS, never merged),
+B GDELT news coverage (keyless) + THE LEAD front-page story, C ShareRow intents + /f/[id] OG unfurl
+route + why-lines + receipts export, D data broadening (EC ~1,500, CH deepening, APPG register) +
+Connect always-answers + signposting. The line extended: overseas-linked = factual registered
+residence; ICIJ/same-name = disclaimed leads only.
+
 Previous state (still true underneath): milestones 1-7 + the findings-first rebuild; the
 launch-readiness push (calibration → depth → polish → international; hosting/auth excluded per Roy,
 "v last").

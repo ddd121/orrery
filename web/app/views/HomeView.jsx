@@ -14,20 +14,21 @@
  * built from a finding's sourced `slots` (see `lib/deal.js`), never an allegation.
  */
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { MagnifyingGlass, ArrowsClockwise, SealCheck, IdentificationBadge } from '@phosphor-icons/react';
+import { MagnifyingGlass, ArrowsClockwise, SealCheck, IdentificationBadge, ArrowSquareOut } from '@phosphor-icons/react';
 import {
-  BRASS, TEXT_1, TEXT_2, TEXT_3, HAIRLINE, INK_1, INK_2, RADIUS, TYPO,
+  BRASS, SIGNAL, TEXT_1, TEXT_2, TEXT_3, HAIRLINE, INK_1, INK_2, RADIUS, TYPO,
   typeColor, typeIcon, confTier,
 } from '@/lib/graph-utils';
-import { getOrCreateVisitorId, todayISODate, dealHand, headlineFor, shapeLabel, pivotEntityId } from '@/lib/deal';
+import { getOrCreateVisitorId, todayISODate, dealHand, headlineFor, whyLine, shapeLabel, pivotEntityId, truncate } from '@/lib/deal';
 import { insightSentence, topInsight } from '@/lib/insights';
 import MiniOrrery from '../components/MiniOrrery';
+import ShareRow from '../components/ShareRow';
 
 /* real entities the START WITH chips resolve against; hidden if absent from this dataset */
 const START_WITH_NAMES = ['Ecotricity Group Limited', 'IPGL Limited', 'GB News', 'Dale Vince'];
 const CONNECT_CHIP = { a: 'Dale Vince', b: 'Labour' };
 
-export default function HomeView({ nodes, links, types, findings = [], pairs = [], stats = {}, insightsByEntity = {}, onOpenEntity, onOpenFinding, onOpenLedger, onExplore, onConnect }) {
+export default function HomeView({ nodes, links, types, findings = [], pairs = [], stats = {}, insightsByEntity = {}, coverageByEntity = {}, overseasByDonor = {}, onOpenEntity, onOpenFinding, onOpenLedger, onExplore, onConnect }) {
   const nodesById = useMemo(() => {
     const m = {};
     nodes.forEach((n) => (m[n.id] = n));
@@ -39,10 +40,37 @@ export default function HomeView({ nodes, links, types, findings = [], pairs = [
     return regSet.size || 6;
   }, [links]);
 
+  /* THE LEAD: the single top front-page story, scored surprise x shape boost x has-coverage
+     boost (plan Wave B.3). Computed here so the Deal below can exclude it from its hand. */
+  const leadFinding = useMemo(
+    () => pickLeadFinding(findings, coverageByEntity),
+    [findings, coverageByEntity],
+  );
+  const dealFindings = useMemo(
+    () => (leadFinding ? findings.filter((f) => f.id !== leadFinding.id) : findings),
+    [findings, leadFinding],
+  );
+
+  const focusHeroSearch = () => {
+    if (typeof document === 'undefined') return;
+    const el = document.getElementById('hero-search-input');
+    if (el) el.focus();
+  };
+
   return (
     <div>
+      {leadFinding && (
+        <TheLead
+          finding={leadFinding}
+          nodesById={nodesById}
+          coverageByEntity={coverageByEntity}
+          overseasByDonor={overseasByDonor}
+          onOpenFinding={onOpenFinding}
+        />
+      )}
+
       <div className="home-grid">
-        {/* ------------------------------- LEFT: MASTHEAD ------------------------------- */}
+        {/* ------------------------------- MASTHEAD ------------------------------- */}
         <section className="home-masthead">
           <Eyebrow>A public-record map of UK political influence</Eyebrow>
           <h1 style={{ ...TYPO.display, color: TEXT_1, margin: '10px 0 14px' }}>
@@ -56,13 +84,13 @@ export default function HomeView({ nodes, links, types, findings = [], pairs = [
           <HeroSearch nodes={nodes} types={types} findings={findings} insightsByEntity={insightsByEntity} onOpenEntity={onOpenEntity} />
           <MPFinder nodes={nodes} onOpenEntity={onOpenEntity} />
           <StartWithChips nodes={nodes} types={types} onOpenEntity={onOpenEntity} onConnect={onConnect} />
-        </section>
-
-        {/* ---------------------------------- RIGHT: THE DEAL ---------------------------------- */}
-        <section className="home-deal">
-          <TheDeal nodes={nodes} nodesById={nodesById} findings={findings} onOpenFinding={onOpenFinding} />
+          <StepsStrip onFocusSearch={focusHeroSearch} onConnect={onConnect} onOpenFinding={onOpenFinding} leadFinding={leadFinding} />
         </section>
       </div>
+
+      <section className="home-deal-section">
+        <TheDeal nodes={nodes} nodesById={nodesById} findings={dealFindings} onOpenFinding={onOpenFinding} />
+      </section>
 
       <StateOfTheRegister stats={stats} nodesById={nodesById} onOpenEntity={onOpenEntity} onOpenLedger={onOpenLedger} />
       <CredibilityStrip total={nodes.length} registerCount={registerCount} findingCount={findings.length} />
@@ -70,15 +98,172 @@ export default function HomeView({ nodes, links, types, findings = [], pairs = [
 
       <style>{`
         .home-grid {
-          display: grid; grid-template-columns: 1.1fr 1fr; gap: 40px;
-          max-width: 1160px; margin: 0 auto; padding: 56px 20px 40px; align-items: start;
+          max-width: 1160px; margin: 0 auto; padding: 40px 20px 8px;
         }
-        .home-masthead { padding-top: 8px; }
+        .home-masthead { padding-top: 8px; max-width: 620px; }
+        .home-deal-section { max-width: 1160px; margin: 0 auto; padding: 24px 20px 40px; }
         @media (max-width: 860px) {
-          .home-grid { grid-template-columns: 1fr; padding: 32px 16px 24px; gap: 32px; }
-          .home-masthead { padding-top: 0; }
+          .home-grid { padding: 28px 16px 4px; }
+          .home-masthead { padding-top: 0; max-width: none; }
+          .home-deal-section { padding: 20px 16px 24px; }
         }
       `}</style>
+    </div>
+  );
+}
+
+/* score = surprise x shape boost (OVERSEAS_MONEY leads, then LOOP_CLOSED) x a boost when any
+   member entity has news coverage. Picks the single highest-scoring finding as THE LEAD. */
+const LEAD_SHAPE_BOOST = { OVERSEAS_MONEY: 1.5, LOOP_CLOSED: 1.3 };
+function findingHasCoverage(finding, coverageByEntity) {
+  return (finding.member_entity_ids || []).some((id) => (coverageByEntity[id] || []).length > 0);
+}
+function pickLeadFinding(findings, coverageByEntity) {
+  if (!findings || findings.length === 0) return null;
+  let best = null;
+  let bestScore = -Infinity;
+  for (const f of findings) {
+    const boost = LEAD_SHAPE_BOOST[f.shape_code] ?? 1.0;
+    const coverageBoost = findingHasCoverage(f, coverageByEntity) ? 1.3 : 1.0;
+    const score = (f.surprise || 0) * boost * coverageBoost;
+    if (score > bestScore) {
+      bestScore = score;
+      best = f;
+    }
+  }
+  return best;
+}
+
+/* ----------------------------------- THE LEAD ----------------------------------- */
+/* The front page: one full-width splash for the single top-scoring finding. Facts, not
+   verdicts: every clause here reads straight off the finding's own sourced slots. */
+function TheLead({ finding, nodesById, coverageByEntity, overseasByDonor, onOpenFinding }) {
+  const tier = confTier(finding.min_confidence);
+  const pct = Math.round(finding.min_confidence * 100);
+  const registerCount = registerCountOf(finding);
+  const pivotId = pivotEntityId(finding, nodesById);
+  const jurisdiction = finding.shape_code === 'OVERSEAS_MONEY' ? finding.slots?.jurisdiction : null;
+  const hasOverseasLead = !!(pivotId && (overseasByDonor[pivotId] || []).length > 0);
+
+  const newsChips = useMemo(() => {
+    const seen = new Set();
+    const out = [];
+    for (const id of finding.member_entity_ids || []) {
+      for (const r of coverageByEntity[id] || []) {
+        const key = r.id ?? r.url;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(r);
+        if (out.length >= 2) break;
+      }
+      if (out.length >= 2) break;
+    }
+    return out;
+  }, [finding, coverageByEntity]);
+
+  return (
+    <section style={{ borderBottom: `1px solid ${HAIRLINE}`, background: 'rgba(217,166,72,0.035)' }}>
+      <div style={{ maxWidth: 1160, margin: '0 auto', padding: '40px 20px 34px' }}>
+        <div style={{ ...TYPO.dataLabel, color: BRASS, marginBottom: 14 }}>THE LEAD</div>
+        <div className="lead-grid" style={{ display: 'flex', gap: 36, alignItems: 'center', flexWrap: 'wrap-reverse' }}>
+          <div style={{ flex: '1 1 440px', minWidth: 280 }}>
+            <button
+              onClick={() => onOpenFinding && onOpenFinding(finding)}
+              style={{ display: 'block', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+            >
+              <h2 style={{ ...TYPO.display, color: TEXT_1, margin: 0 }}>{headlineFor(finding)}</h2>
+            </button>
+            <p style={{ ...TYPO.body, color: TEXT_2, marginTop: 14, marginBottom: 0, maxWidth: 580 }}>{whyLine(finding)}</p>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 18 }}>
+              <Stamp color={BRASS}>{shapeLabel(finding.shape_code)}</Stamp>
+              <Stamp color={tier.color}>{tier.label.toUpperCase()} &middot; {pct}%</Stamp>
+              <Stamp color={TEXT_2}>{registerCount} {registerCount === 1 ? 'REGISTER' : 'REGISTERS'}</Stamp>
+              {jurisdiction && <Stamp color={TEXT_2}>REGISTERED RESIDENCE: {jurisdiction}</Stamp>}
+              {hasOverseasLead && <DottedStamp color={SIGNAL}>OVERSEAS LEAD</DottedStamp>}
+            </div>
+
+            {newsChips.length > 0 && (
+              <div style={{ marginTop: 18 }}>
+                <div style={{ ...TYPO.dataLabel, marginBottom: 8 }}>IN THE NEWS</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {newsChips.map((r) => (
+                    <a
+                      key={r.id ?? r.url}
+                      href={r.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderRadius: RADIUS.sm,
+                        background: 'rgba(255,255,255,0.03)', border: `1px solid ${HAIRLINE}`, color: TEXT_2, fontSize: 12, textDecoration: 'none',
+                      }}
+                    >
+                      {r.domain}: {truncate(r.title, 42)} <ArrowSquareOut size={11} />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{ marginTop: 20 }}>
+              {/* no explicit url: ShareRow resolves its own /f/{id} link post-mount (hydration-safe) */}
+              <ShareRow finding={finding} nodesById={nodesById} />
+            </div>
+          </div>
+          <div style={{ flex: '0 0 auto' }}>
+            <MiniOrrery finding={finding} nodesById={nodesById} size={180} showLabels />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function DottedStamp({ color, children }) {
+  return (
+    <span
+      style={{
+        display: 'inline-flex', alignItems: 'center', padding: '3px 8px', borderRadius: RADIUS.xs,
+        background: `${color}14`, border: `1px dashed ${color}88`, ...TYPO.dataLabel, color, letterSpacing: '.06em',
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+/* ------------------------------- three-step strip ------------------------------- */
+/* A compact, caption-sized signpost for the two loops the product supports: search,
+   trace a path, share. Never a hero element, one hairline box under the masthead. */
+function StepsStrip({ onFocusSearch, onConnect, onOpenFinding, leadFinding }) {
+  const steps = [
+    { n: 1, label: 'Search any name', onClick: onFocusSearch },
+    { n: 2, label: 'Follow the money', onClick: onConnect },
+    { n: 3, label: 'Share the cutting', onClick: () => leadFinding && onOpenFinding && onOpenFinding(leadFinding) },
+  ];
+  return (
+    <div
+      style={{
+        marginTop: 20, display: 'inline-flex', alignItems: 'center', flexWrap: 'wrap',
+        borderRadius: RADIUS.sm, border: `1px solid ${HAIRLINE}`, background: 'rgba(255,255,255,0.02)', padding: '3px 2px',
+      }}
+    >
+      {steps.map((s, i) => (
+        <React.Fragment key={s.n}>
+          {i > 0 && <span style={{ color: TEXT_3, padding: '0 2px', fontSize: 12 }}>&middot;</span>}
+          <button
+            onClick={s.onClick}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 38, padding: '0 10px',
+              borderRadius: RADIUS.xs, background: 'none', border: 'none', cursor: 'pointer', color: TEXT_2, fontSize: 12.5,
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.color = TEXT_1)}
+            onMouseLeave={(e) => (e.currentTarget.style.color = TEXT_2)}
+          >
+            <span style={{ color: BRASS, fontWeight: 700 }}>{s.n}</span> {s.label}
+          </button>
+        </React.Fragment>
+      ))}
     </div>
   );
 }
@@ -133,6 +318,7 @@ function HeroSearch({ nodes, types, findings = [], insightsByEntity = {}, onOpen
     <div ref={boxRef} style={{ position: 'relative', maxWidth: 480 }}>
       <MagnifyingGlass size={17} color={TEXT_2} style={{ position: 'absolute', left: 14, top: 14 }} />
       <input
+        id="hero-search-input"
         value={q}
         onChange={(e) => { setQ(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}

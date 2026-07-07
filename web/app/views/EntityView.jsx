@@ -13,22 +13,29 @@
  * conflict-box styling (vermillion; low-priority greyed). Facts, not verdicts.
  */
 import React, { useMemo, useState } from 'react';
-import { ArrowLeft, WarningDiamond, Info, Graph, Path, LinkSimple, Check } from '@phosphor-icons/react';
+import { ArrowLeft, WarningDiamond, Info, Graph, Path, LinkSimple, Check, Copy, ArrowSquareOut } from '@phosphor-icons/react';
 import {
-  GOLD, VERM, TEXT, MUTE, HAIR, MONO, TYPO,
+  GOLD, VERM, SIGNAL, TEXT, MUTE, HAIR, MONO, TYPO,
   typeColor, typeIcon, typeLabel, tiesOf, idOf,
 } from '@/lib/graph-utils';
 import { insightSentence } from '@/lib/insights';
 import { headlineFor } from '@/lib/deal';
+import { copyReceipts } from '@/lib/receipts';
 import ForceGraph from '../components/ForceGraph';
 import TieRow from '../components/TieRow';
 import MiniOrrery from '../components/MiniOrrery';
 import { CuttingButton } from '../components/Cutting';
+import ShareRow from '../components/ShareRow';
+import InTheNews from '../components/InTheNews';
 
 const EGO_CAP = 40;
 const HEADLINE_CAP = 3;
 
-export default function EntityView({ entityId, nodes, links, types, insights = [], findings = [], onOpenEntity, onOpenFinding, onBack, onExplore, onConnect }) {
+export default function EntityView({
+  entityId, nodes, links, types, insights = [], findings = [],
+  coverageByEntity = {}, offshoreByEntity = {}, overseasByDonor = {},
+  onOpenEntity, onOpenFinding, onBack, onExplore, onConnect,
+}) {
   const nodeById = useMemo(() => {
     const m = {};
     nodes.forEach((n) => (m[n.id] = n));
@@ -99,9 +106,39 @@ export default function EntityView({ entityId, nodes, links, types, insights = [
             </span>
             <span style={{ color: 'rgba(190,200,230,0.25)' }}>·</span>
             <span style={{ fontSize: 13, color: MUTE }}>{node.role}</span>
+            {node.jurisdiction && node.jurisdiction !== 'GB' && (
+              <>
+                <span style={{ color: 'rgba(190,200,230,0.25)' }}>·</span>
+                <HeaderStamp>Registered residence: {node.jurisdiction} &middot; via Companies House</HeaderStamp>
+              </>
+            )}
           </div>
         </div>
       </div>
+
+      {/* lead chips: ICIJ offshore-name match and/or a same-name overseas-resident CH officer.
+          Both are DOTTED, disclaimed leads — never merged, never stated as fact. */}
+      {((offshoreByEntity[entityId] || []).length > 0 || (overseasByDonor[entityId] || []).length > 0) && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
+          {(offshoreByEntity[entityId] || []).slice(0, 1).map((lead) => (
+            <LeadChip key={lead.id}>
+              A company of this name appears in the {lead.source_leak} data (ICIJ). Names can coincide; this is a
+              lead, not an identification.
+              {lead.icij_url && (
+                <a href={lead.icij_url} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 6, color: SIGNAL, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                  ICIJ record <ArrowSquareOut size={11} />
+                </a>
+              )}
+            </LeadChip>
+          ))}
+          {(overseasByDonor[entityId] || []).slice(0, 1).map((lead) => (
+            <LeadChip key={lead.id}>
+              A Companies House officer of this name is registered as resident in {lead.country}. Names can
+              coincide; this is a lead, not an identification.
+            </LeadChip>
+          ))}
+        </div>
+      )}
 
       {/* conflict banner (strength-aware; low-priority greyed) */}
       {node.conflict && <ConflictBanner node={node} />}
@@ -217,6 +254,13 @@ export default function EntityView({ entityId, nodes, links, types, insights = [
               {ego.nodes.length - 1 > 0 ? `${ego.nodes.length - 1} direct connection${ego.nodes.length - 1 === 1 ? '' : 's'} · tap to open` : 'No direct connections'}
             </div>
 
+            {/* in the news — hidden entirely while there is no coverage for this name */}
+            {(coverageByEntity[entityId] || []).length > 0 && (
+              <div style={{ marginTop: 20 }}>
+                <InTheNews rows={coverageByEntity[entityId]} />
+              </div>
+            )}
+
             {/* actions */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 16 }}>
               <button
@@ -235,16 +279,17 @@ export default function EntityView({ entityId, nodes, links, types, insights = [
               >
                 <Path size={16} /> Find a path from here
               </button>
-              <div style={{ display: 'flex', gap: 10 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <ShareButton />
-                </div>
-                {spark && (
+              {spark ? (
+                // no explicit url: ShareRow resolves its own /f/{id} link post-mount (hydration-safe)
+                <ShareRow finding={spark} nodesById={nodeById} />
+              ) : (
+                <div style={{ display: 'flex', gap: 10 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <CuttingButton finding={spark} nodesById={nodeById} label="Copy as cutting" />
+                    <ShareButton />
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+              <ReceiptsButton node={node} groups={groups} />
             </div>
           </div>
         </aside>
@@ -279,6 +324,37 @@ function ConflictBanner({ node }) {
   );
 }
 
+/* squared, neutral header stamp — used for the jurisdiction chip alongside the type/role line. */
+function HeaderStamp({ children }) {
+  return (
+    <span
+      style={{
+        display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: 6,
+        background: 'rgba(255,255,255,0.04)', border: `1px solid ${HAIR}`, fontSize: 11.5, color: MUTE,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+/* a dotted, disclaimed lead chip (ICIJ / overseas-officer name matches): dashed SIGNAL
+   border at reduced opacity, never solid — solid means established, this is a lead only. */
+function LeadChip({ children }) {
+  return (
+    <div
+      style={{
+        display: 'flex', alignItems: 'flex-start', gap: 8, padding: '10px 12px', borderRadius: 11,
+        background: 'rgba(224,106,80,0.06)', border: `1px dashed rgba(224,106,80,0.6)`, color: '#E8C7BC',
+        fontSize: 12.5, lineHeight: 1.55,
+      }}
+    >
+      <WarningDiamond size={14} color={SIGNAL} style={{ flex: '0 0 auto', marginTop: 2 }} />
+      <span>{children}</span>
+    </div>
+  );
+}
+
 /* --------------------------------- helpers --------------------------------- */
 function BackBtn({ onBack }) {
   return (
@@ -287,6 +363,34 @@ function BackBtn({ onBack }) {
       style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 11px', borderRadius: 9, background: 'rgba(255,255,255,0.05)', border: `1px solid ${HAIR}`, color: MUTE, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
     >
       <ArrowLeft size={15} /> Findings
+    </button>
+  );
+}
+
+/* "Copy the receipts": a markdown export of every sourced tie on this dossier, so a
+   journalist can paste it into notes without losing the citation (lib/receipts.js). */
+function ReceiptsButton({ node, groups }) {
+  const [state, setState] = useState('idle'); // idle | copied | error
+  const copy = async () => {
+    try {
+      const ties = (groups || []).flatMap((g) => g.ties);
+      await copyReceipts({ title: node.name, ties, url: typeof window !== 'undefined' ? window.location.href : '' });
+      setState('copied');
+      setTimeout(() => setState('idle'), 1800);
+    } catch {
+      setState('error');
+      setTimeout(() => setState('idle'), 1800);
+    }
+  };
+  const copied = state === 'copied';
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title="Copy every sourced tie on this dossier as markdown"
+      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', height: 44, borderRadius: 11, background: copied ? 'rgba(124,197,142,0.12)' : 'rgba(255,255,255,0.04)', border: `1px solid ${copied ? 'rgba(124,197,142,0.5)' : HAIR}`, color: copied ? '#7CC58E' : MUTE, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+    >
+      {copied ? <><Check size={16} /> Receipts copied</> : <><Copy size={16} /> Copy the receipts</>}
     </button>
   );
 }

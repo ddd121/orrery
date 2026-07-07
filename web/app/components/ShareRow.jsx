@@ -10,7 +10,7 @@
  * Labels are visible at >=560px and icon-only below that (aria-label always carries the
  * name); `compact` forces icon-only regardless of viewport, for tight layouts.
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { XLogo, WhatsappLogo, LinkedinLogo, LinkSimple, Check } from '@phosphor-icons/react';
 import { HAIRLINE, RADIUS, TEXT_2, TEXT_1, POSITIVE } from '@/lib/graph-utils';
 import { shareText } from '@/lib/deal';
@@ -18,10 +18,17 @@ import { CuttingButton } from './Cutting';
 
 export function ShareRow({ finding, nodesById, url, compact }) {
   const [copied, setCopied] = useState(false);
+  // Resolved post-mount only (never during the render that SSR/hydration both run), so the
+  // server-rendered HTML and the first client render agree — `window` is never read during
+  // render itself, only inside this effect. Fixes a hydration mismatch on every share href.
+  const [origin, setOrigin] = useState('');
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
 
   if (!finding) return null;
 
-  const shareUrl = url || (typeof window !== 'undefined' ? `${window.location.origin}/f/${finding.id}` : '');
+  const shareUrl = url || (origin ? `${origin}/f/${finding.id}` : '');
   const text = shareText(finding);
 
   const copyLink = useCallback(async () => {

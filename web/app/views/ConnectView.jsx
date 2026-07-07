@@ -15,12 +15,14 @@
  * than imply the two are unconnected.
  */
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { MagnifyingGlass, X, ArrowLeft, ArrowRight, Path, ArrowCounterClockwise, Info, SmileySad } from '@phosphor-icons/react';
+import { MagnifyingGlass, X, ArrowLeft, ArrowRight, Path, ArrowCounterClockwise, Info, SmileySad, Shuffle } from '@phosphor-icons/react';
 import {
-  GOLD, VERM, TEXT, MUTE, HAIR, PANEL, MONO, POSITIVE, SIGNAL, BRASS, TYPO, RADIUS, TEXT_1, TEXT_2,
-  typeColor, typeIcon, confColor, confTier, findPath, idOf,
+  GOLD, VERM, TEXT, MUTE, HAIR, PANEL, MONO, POSITIVE, SIGNAL, BRASS, TYPO, RADIUS, TEXT_1, TEXT_2, TEXT_3,
+  typeColor, typeIcon, confColor, confTier, findPath, idOf, amountValue,
 } from '@/lib/graph-utils';
+import { insightSentence, topInsight } from '@/lib/insights';
 import ForceGraph from '../components/ForceGraph';
+import ShareRow from '../components/ShareRow';
 
 const DEFAULT_THRESH = 40; // matches the Explore slider default
 
@@ -47,7 +49,7 @@ function linkBetween(aId, bId, links) {
   return null;
 }
 
-export default function ConnectView({ nodes, links, types, onOpenEntity, onBack, initialFromId, initialToId, pairs }) {
+export default function ConnectView({ nodes, links, types, onOpenEntity, onBack, initialFromId, initialToId, pairs, insightsByEntity = {} }) {
   const nodeById = useMemo(() => {
     const m = {};
     nodes.forEach((n) => (m[n.id] = n));
@@ -113,6 +115,33 @@ export default function ConnectView({ nodes, links, types, onOpenEntity, onBack,
 
   const reset = () => { setToId(null); setThresh(DEFAULT_THRESH); };
 
+  // "Surprise me": deals a random suggested pair into both pickers (UI-only randomness,
+  // never a claim — suggested_pairs is itself a sourced, pre-computed cross-register list).
+  const surpriseMe = () => {
+    if (!pairs || pairs.length === 0) return;
+    const valid = pairs.filter((p) => nodeById[p.from_entity_id] && nodeById[p.to_entity_id]);
+    if (valid.length === 0) return;
+    const p = valid[Math.floor(Math.random() * valid.length)];
+    setFromId(p.from_entity_id);
+    setToId(p.to_entity_id);
+  };
+
+  // a shareable synthetic "finding" for a successful trail (ConnectView traces a path,
+  // not a stored finding row, so there's no /f/{id} for it — Copy link semantics instead,
+  // via an explicit url on ShareRow rather than the finding's own id).
+  const trailFinding = useMemo(() => {
+    if (!ready || !path || !summary || !from || !to) return null;
+    return {
+      id: 'trail',
+      shape_code: 'CONNECT_TRAIL',
+      member_entity_ids: path,
+      member_statement_ids: [],
+      slots: { from: from.name, to: to.name, steps: summary.steps, n_registers: summary.sources.length },
+      surprise: 0,
+      min_confidence: summary.weakest / 100,
+    };
+  }, [ready, path, summary, from, to]);
+
   return (
     <div style={{ maxWidth: 1080, margin: '0 auto', padding: '18px 16px 72px' }}>
       <button
@@ -160,6 +189,23 @@ export default function ConnectView({ nodes, links, types, onOpenEntity, onBack,
         />
       </div>
 
+      {/* ----------------------------- surprise me ----------------------------- */}
+      {pairs && pairs.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <button
+            onClick={surpriseMe}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8, height: 44, padding: '0 14px', borderRadius: RADIUS.md,
+              background: 'rgba(255,255,255,0.04)', border: `1px solid ${HAIR}`, color: TEXT_1, cursor: 'pointer', fontSize: 13.5, fontWeight: 600,
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.borderColor = `${GOLD}66`)}
+            onMouseLeave={(e) => (e.currentTarget.style.borderColor = HAIR)}
+          >
+            <Shuffle size={16} /> Surprise me
+          </button>
+        </div>
+      )}
+
       {/* ----------------------------- suggested pairs ----------------------------- */}
       {!from && !to && pairs && pairs.length > 0 && (
         <SuggestedPairs
@@ -205,6 +251,7 @@ export default function ConnectView({ nodes, links, types, onOpenEntity, onBack,
             types={types}
             nodeById={nodeById}
             onOpenEntity={onOpenEntity}
+            trailFinding={trailFinding}
           />
         )}
 
@@ -213,7 +260,14 @@ export default function ConnectView({ nodes, links, types, onOpenEntity, onBack,
             thresh={thresh}
             from={from}
             to={to}
+            links={links}
+            nodeById={nodeById}
+            types={types}
+            insightsByEntity={insightsByEntity}
+            pairs={pairs}
+            onOpenEntity={onOpenEntity}
             onLower={() => setThresh(0)}
+            onPickPair={(a, b) => { setFromId(a); setToId(b); }}
           />
         )}
       </div>
@@ -232,7 +286,7 @@ export default function ConnectView({ nodes, links, types, onOpenEntity, onBack,
 /* Cross-register endpoint pairs worth tracing (public.suggested_pairs, fetched in
    loadFindings but never rendered until now). Shown only while both pickers are
    empty, as a fast way in rather than typing two names cold. */
-function SuggestedPairs({ pairs, nodeById, onPick }) {
+function SuggestedPairs({ pairs, nodeById, onPick, heading = 'Try one of these' }) {
   const chips = useMemo(
     () =>
       pairs
@@ -244,7 +298,7 @@ function SuggestedPairs({ pairs, nodeById, onPick }) {
   if (chips.length === 0) return null;
   return (
     <div style={{ marginTop: 16 }}>
-      <div style={{ ...TYPO.dataLabel, marginBottom: 8 }}>Try one of these</div>
+      <div style={{ ...TYPO.dataLabel, marginBottom: 8 }}>{heading}</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {chips.map((p) => (
           <button
@@ -378,37 +432,119 @@ function Prompt({ from, to, sameEntity }) {
   );
 }
 
-function NoPath({ thresh, from, to, onLower }) {
+function NoPath({ thresh, from, to, links, nodeById, types, insightsByEntity, pairs, onOpenEntity, onLower, onPickPair }) {
   const atZero = thresh === 0;
   return (
-    <div style={{ padding: '22px 18px', borderRadius: 14, background: 'rgba(229,101,75,0.06)', border: '1px solid rgba(229,101,75,0.3)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 8 }}>
-        <SmileySad size={18} color={VERM} />
-        <span style={{ fontSize: 15.5, fontWeight: 700 }}>
-          {atZero ? 'Not connected in the current data' : `No connection found at ${thresh}% confidence`}
-        </span>
-      </div>
-      <p style={{ fontSize: 13.5, color: '#E8C7BC', lineHeight: 1.55, margin: '0 0 14px' }}>
-        {atZero ? (
-          <>There is no route between <b style={{ color: TEXT }}>{from.name}</b> and <b style={{ color: TEXT }}>{to.name}</b> in any register we hold, even at the weakest link. That can change as sources are added.</>
-        ) : (
-          <>A route may still exist through lower-confidence links. Include weaker links to widen the search.</>
+    <div>
+      <div style={{ padding: '22px 18px', borderRadius: 14, background: 'rgba(229,101,75,0.06)', border: '1px solid rgba(229,101,75,0.3)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 8 }}>
+          <SmileySad size={18} color={VERM} />
+          <span style={{ fontSize: 15.5, fontWeight: 700 }}>
+            {atZero ? 'Not connected in the current data' : `No connection found at ${thresh}% confidence`}
+          </span>
+        </div>
+        <p style={{ fontSize: 13.5, color: '#E8C7BC', lineHeight: 1.55, margin: '0 0 14px' }}>
+          {atZero ? (
+            <>There is no route between <b style={{ color: TEXT }}>{from.name}</b> and <b style={{ color: TEXT }}>{to.name}</b> in any register we hold, even at the weakest link. That can change as sources are added.</>
+          ) : (
+            <>A route may still exist through lower-confidence links. Include weaker links to widen the search.</>
+          )}
+        </p>
+        {!atZero && (
+          <button
+            onClick={onLower}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 10, background: 'rgba(232,182,90,0.14)', border: `1px solid rgba(232,182,90,0.45)`, color: GOLD, fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }}
+          >
+            <ArrowCounterClockwise size={15} /> Include weaker links (search at 0%)
+          </button>
         )}
-      </p>
-      {!atZero && (
-        <button
-          onClick={onLower}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderRadius: 10, background: 'rgba(232,182,90,0.14)', border: `1px solid rgba(232,182,90,0.45)`, color: GOLD, fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }}
-        >
-          <ArrowCounterClockwise size={15} /> Include weaker links (search at 0%)
-        </button>
+      </div>
+
+      {/* always answers: never a dead end. Each name's own nearest facts, plus a way in
+          that DOES connect, so a visitor still leaves with something sourced. */}
+      <div style={{ marginTop: 22 }}>
+        <div style={{ ...TYPO.dataLabel, marginBottom: 10 }}>Meanwhile, here is each name's nearest money</div>
+        <div className="nomatch-grid" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
+          <NearestMoneyCard node={from} links={links} nodeById={nodeById} types={types} insightsByEntity={insightsByEntity} onOpen={() => onOpenEntity && onOpenEntity(from.id)} />
+          <NearestMoneyCard node={to} links={links} nodeById={nodeById} types={types} insightsByEntity={insightsByEntity} onOpen={() => onOpenEntity && onOpenEntity(to.id)} />
+        </div>
+        <style>{`
+          @media (min-width: 640px) {
+            .nomatch-grid { grid-template-columns: 1fr 1fr !important; }
+          }
+        `}</style>
+      </div>
+
+      {pairs && pairs.length > 0 && (
+        <SuggestedPairs pairs={pairs} nodeById={nodeById} onPick={onPickPair} heading="Or try a pair that does connect" />
       )}
     </div>
   );
 }
 
+/* one endpoint's own nearest sourced facts, shown when a pair doesn't connect: its top
+   insight sentence (already computed by the pipeline's Takeaway engine) plus its single
+   largest-amount tie, so "no path" still leaves the visitor with something concrete. */
+function NearestMoneyCard({ node, links, nodeById, types, insightsByEntity, onOpen }) {
+  if (!node) return null;
+  const col = typeColor(node.type, types);
+  const Icon = typeIcon(node.type, types);
+  const list = insightsByEntity?.[node.id];
+  const insight = list && list.length ? insightSentence(topInsight(list)).sentence : null;
+  const tie = strongestMoneyTie(node.id, links, nodeById);
+
+  return (
+    <button
+      onClick={onOpen}
+      style={{
+        display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer', padding: 14, borderRadius: RADIUS.md,
+        background: 'rgba(255,255,255,0.03)', border: `1px solid ${HAIR}`, color: TEXT,
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.borderColor = `${col}66`)}
+      onMouseLeave={(e) => (e.currentTarget.style.borderColor = HAIR)}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <Icon size={15} color={col} />
+        <span style={{ fontSize: 14, fontWeight: 700 }}>{node.name}</span>
+      </div>
+      {insight ? (
+        <p style={{ ...TYPO.bodySm, color: TEXT_1, margin: '0 0 8px' }}>{insight}</p>
+      ) : (
+        <p style={{ ...TYPO.bodySm, color: TEXT_2, margin: '0 0 8px' }}>No further sourced takeaway yet for this name.</p>
+      )}
+      {tie && tie.other ? (
+        <p style={{ ...TYPO.caption, color: TEXT_3, margin: 0 }}>
+          Largest sourced money tie: {tie.rel} <b style={{ color: TEXT_2 }}>{tie.other.name}</b>{tie.amount ? ` · ${tie.amount}` : ''}
+        </p>
+      ) : (
+        <p style={{ ...TYPO.caption, color: TEXT_3, margin: 0 }}>No sourced money tie recorded for this name yet.</p>
+      )}
+    </button>
+  );
+}
+
+/** The single largest-amount tie touching `entityId`, or null. Amount-bearing ties only
+ *  (donations/contracts); a zero/absent amount never wins so the "nearest money" fact is
+ *  always a real figure, not a directorship with no £ attached. */
+function strongestMoneyTie(entityId, links, nodeById) {
+  let best = null;
+  let bestVal = 0;
+  for (const l of links) {
+    const a = idOf(l.source), b = idOf(l.target);
+    if (a !== entityId && b !== entityId) continue;
+    const val = amountValue(l);
+    if (val <= bestVal) continue;
+    const otherId = a === entityId ? b : a;
+    const other = nodeById[otherId];
+    if (!other) continue;
+    bestVal = val;
+    best = { other, rel: l.rel, amount: l.amount, confidence: l.confidence, method: l.method };
+  }
+  return best;
+}
+
 /* ------------------------------- path result ------------------------------- */
-function PathResult({ path, hops, pathGraph, summary, types, nodeById, onOpenEntity }) {
+function PathResult({ path, hops, pathGraph, summary, types, nodeById, onOpenEntity, trailFinding }) {
   return (
     <div className="in">
       {/* summary line */}
@@ -468,11 +604,31 @@ function PathResult({ path, hops, pathGraph, summary, types, nodeById, onOpenEnt
         </div>
       </div>
 
+      {/* share this trail — no /f/{id} route for a traced path, so Copy link semantics via
+          an explicit url (the hash-routed Connect view) rather than the finding's own id */}
+      {trailFinding && <ShareTrail trailFinding={trailFinding} nodeById={nodeById} />}
+
       {/* the line we hold */}
       <div style={{ marginTop: 18, fontSize: 12, color: MUTE, lineHeight: 1.55, display: 'flex', gap: 8 }}>
         <Info size={13} style={{ flex: '0 0 auto', marginTop: 1 }} />
         Each hop is a sourced public-record fact, shown with its confidence and where it came from. A connection is not a judgement or any allegation of wrongdoing.
       </div>
+    </div>
+  );
+}
+
+/* Share a successful trail. Resolves the absolute `/#connect` url in an effect (post-mount
+   only) rather than during render, so the server-rendered HTML and the first client render
+   agree — reading `window` during render itself is what causes hydration mismatches. */
+function ShareTrail({ trailFinding, nodeById }) {
+  const [origin, setOrigin] = useState('');
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
+  return (
+    <div style={{ marginTop: 26 }}>
+      <div style={{ ...TYPO.dataLabel, marginBottom: 10 }}>Share this trail</div>
+      <ShareRow finding={trailFinding} nodesById={nodeById} url={origin ? `${origin}/#connect` : undefined} />
     </div>
   );
 }

@@ -14,6 +14,8 @@ export type GraphNode = {
   conflictReason?: string;
   conflictStrength?: string;
   conflictOverlap?: string;
+  jurisdiction?: string;
+  nationality?: string;
 };
 export type GraphLink = {
   id?: string;
@@ -142,6 +144,8 @@ export async function loadGraph(): Promise<{
       conflictReason: attrs.conflict_reason ?? undefined,
       conflictStrength: attrs.conflict_strength ?? undefined,
       conflictOverlap: attrs.conflict_overlap ?? undefined,
+      jurisdiction: attrs.jurisdiction ?? undefined,
+      nationality: attrs.nationality ?? undefined,
     };
   });
 
@@ -297,4 +301,98 @@ export async function loadInsights(): Promise<{
   }
 
   return { insightsByEntity, stats };
+}
+
+/** A news mention of an entity's name, from `public.coverage` (keyless GDELT ingest). */
+export type CoverageRow = {
+  id: string;
+  entity_id: string;
+  title: string;
+  domain: string;
+  url: string;
+  seendate: string;
+  fetched_at: string;
+};
+
+/** An ICIJ Offshore Leaks company-name lead, from `public.offshore_leads`. LEADS ONLY:
+ *  never merged into the graph, always shown with its "names can coincide" disclaimer. */
+export type OffshoreLead = {
+  id: string;
+  entity_id: string;
+  icij_name: string;
+  icij_jurisdiction: string;
+  source_leak: string;
+  icij_node_id: string;
+  icij_url: string;
+  matched_at: string;
+};
+
+/** A same-name overseas-resident-officer lead against a large donor, from
+ *  `public.overseas_leads`. LEADS ONLY, never merged, always disclaimed. */
+export type OverseasLead = {
+  id: string;
+  donor_entity_id: string;
+  donor_name: string;
+  officer_name: string;
+  country: string;
+  amount_gbp: number | null;
+  recipient: string;
+  computed_at: string;
+};
+
+/**
+ * Reads the international-layer tables (`coverage`, `offshore_leads`, `overseas_leads`),
+ * each independently guarded: these tables are built by a parallel pipeline effort and
+ * may not exist yet while this UI ships, so every fetch is wrapped in its own try/catch
+ * returning [] rather than throwing — the app must render correctly (panels simply hidden)
+ * before, during and after that data lands. Anon key + RLS, same boundary as every other read.
+ */
+export async function loadExtras(): Promise<{
+  coverageByEntity: Record<string, CoverageRow[]>;
+  offshoreByEntity: Record<string, OffshoreLead[]>;
+  overseasByDonor: Record<string, OverseasLead[]>;
+}> {
+  const fetchAllSafe = async (table: string, columns: string): Promise<any[]> => {
+    try {
+      const out: any[] = [];
+      const size = 1000;
+      for (let from = 0; ; from += size) {
+        const { data, error } = await supabase.from(table).select(columns).range(from, from + size - 1);
+        if (error) throw error;
+        out.push(...(data ?? []));
+        if (!data || data.length < size) break;
+      }
+      return out;
+    } catch {
+      // table not migrated yet, RLS not yet opened, or a transient error: degrade to
+      // empty rather than fail the whole page load.
+      return [];
+    }
+  };
+
+  const [coverageRows, offshoreRows, overseasRows] = await Promise.all([
+    fetchAllSafe("coverage", "id, entity_id, title, domain, url, seendate, fetched_at"),
+    fetchAllSafe(
+      "offshore_leads",
+      "id, entity_id, icij_name, icij_jurisdiction, source_leak, icij_node_id, icij_url, matched_at",
+    ),
+    fetchAllSafe(
+      "overseas_leads",
+      "id, donor_entity_id, donor_name, officer_name, country, amount_gbp, recipient, computed_at",
+    ),
+  ]);
+
+  const coverageByEntity: Record<string, CoverageRow[]> = {};
+  for (const r of coverageRows) (coverageByEntity[r.entity_id] ??= []).push(r);
+  for (const list of Object.values(coverageByEntity)) {
+    list.sort((a, b) => String(b.seendate).localeCompare(String(a.seendate)));
+  }
+
+  const offshoreByEntity: Record<string, OffshoreLead[]> = {};
+  for (const r of offshoreRows) (offshoreByEntity[r.entity_id] ??= []).push(r);
+
+  const overseasByDonor: Record<string, OverseasLead[]> = {};
+  for (const r of overseasRows) (overseasByDonor[r.donor_entity_id] ??= []).push(r);
+
+  return { coverageByEntity, offshoreByEntity, overseasByDonor };
 }

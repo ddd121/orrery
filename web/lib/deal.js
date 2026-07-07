@@ -217,6 +217,14 @@ export function headlineFor(finding) {
         ? `${s.donor} gave £${amount} to ${partyPhrase(s.recipient)}.`
         : `${s.donor} made a donation to ${partyPhrase(s.recipient)}.`;
     }
+    case 'OVERSEAS_MONEY': {
+      const amount = gbp(s.amount_gbp);
+      return amount && s.jurisdiction
+        ? `£${amount} to ${partyPhrase(s.recipient)} from a donor with a registered residence in ${s.jurisdiction}.`
+        : amount
+          ? `£${amount} to ${partyPhrase(s.recipient)} from a donor with an overseas registered residence.`
+          : `A donation to ${partyPhrase(s.recipient)} from a donor with a registered residence in ${s.jurisdiction ?? 'an overseas jurisdiction'}.`;
+    }
     case 'CROSSING':
       return `${s.entity} appears in ${s.n_registers} public registers.`;
     case 'SECTOR_OVERLAP':
@@ -225,6 +233,12 @@ export function headlineFor(finding) {
         : `${s.mp} sits where their declared interests overlap.`;
     case 'NEW_ON_REGISTER':
       return `New on the register: ${s.subject} and ${s.object}.`;
+    case 'CONNECT_TRAIL':
+      // Connect's traced path, not a pipeline finding: shared as a trail, never a claim
+      // beyond "these two names connect" (see ConnectView's ShareRow wiring).
+      return s.from && s.to
+        ? `${s.from} and ${s.to} connect in ${s.steps} step${s.steps === 1 ? '' : 's'}.`
+        : 'Two names, connected by a sourced trail.';
     default:
       return 'A sourced structural pattern in the public registers.';
   }
@@ -235,9 +249,11 @@ const SHAPE_LABELS = {
   SHARED_BENCH: 'SHARED BENCH',
   FAMILY_DESK: 'FAMILY DESK',
   BIG_MONEY: 'BIG MONEY',
+  OVERSEAS_MONEY: 'OVERSEAS MONEY',
   CROSSING: 'CROSSING',
   SECTOR_OVERLAP: 'SECTOR OVERLAP',
   NEW_ON_REGISTER: 'NEW ON THE REGISTER',
+  CONNECT_TRAIL: 'CONNECTION TRAIL',
 };
 
 /** The shape stamp text for a finding's `shape_code`. */
@@ -266,6 +282,7 @@ export function pivotEntityId(finding, nodesById) {
     case 'CROSSING':
       return findByName(s.company) ?? findByName(s.entity) ?? ids[0];
     case 'BIG_MONEY':
+    case 'OVERSEAS_MONEY':
       return findByName(s.donor) ?? ids[0];
     case 'SHARED_BENCH':
       return findByName(s.org) ?? ids[0];

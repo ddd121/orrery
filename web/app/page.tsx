@@ -1,13 +1,14 @@
-import { loadGraph, loadFindings, loadInsights } from "@/lib/graph";
+import { loadGraph, loadFindings, loadInsights, loadExtras } from "@/lib/graph";
 import OrreryApp from "./OrreryApp";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [{ nodes, links, types }, { findings, pairs }, { insightsByEntity, stats }] = await Promise.all([
+  const [{ nodes, links, types }, { findings, pairs }, { insightsByEntity, stats }, extras] = await Promise.all([
     loadGraph(),
     loadFindings(),
     loadInsights(),
+    loadExtras(),
   ]);
   return (
     <OrreryApp
@@ -18,6 +19,9 @@ export default async function Home() {
       pairs={pairs}
       insightsByEntity={insightsByEntity}
       stats={stats}
+      coverageByEntity={extras.coverageByEntity}
+      offshoreByEntity={extras.offshoreByEntity}
+      overseasByDonor={extras.overseasByDonor}
     />
   );
 }

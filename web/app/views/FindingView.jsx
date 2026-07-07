@@ -14,19 +14,21 @@
  * nothing here infers or predicts.
  */
 import React, { useMemo, useState } from 'react';
-import { ArrowLeft, Path, Compass, LinkSimple, Check } from '@phosphor-icons/react';
+import { ArrowLeft, Path, Compass, Copy, Check } from '@phosphor-icons/react';
 import {
   TEXT_1, TEXT_2, TEXT_3, HAIRLINE, INK_1, BRASS, RADIUS, TYPO, SPACE,
   confTier, idOf,
 } from '@/lib/graph-utils';
-import { headlineFor, shapeLabel, pivotEntityId } from '@/lib/deal';
+import { headlineFor, whyLine, shapeLabel, pivotEntityId } from '@/lib/deal';
+import { copyReceipts } from '@/lib/receipts';
 import MiniOrrery from '../components/MiniOrrery';
 import TieRow from '../components/TieRow';
-import { CuttingButton } from '../components/Cutting';
+import ShareRow from '../components/ShareRow';
+import InTheNews from '../components/InTheNews';
 
 const EVIDENCE_CAP = 12;
 
-export default function FindingView({ finding, nodes, links, types, onOpenEntity, onConnect, onExplore, onBack }) {
+export default function FindingView({ finding, nodes, links, types, coverageByEntity = {}, onOpenEntity, onConnect, onExplore, onBack }) {
   const nodesById = useMemo(() => {
     const m = {};
     (nodes || []).forEach((n) => (m[n.id] = n));
@@ -34,7 +36,7 @@ export default function FindingView({ finding, nodes, links, types, onOpenEntity
   }, [nodes]);
 
   const [showAll, setShowAll] = useState(false);
-  const [linkCopied, setLinkCopied] = useState(false);
+  const [receiptsCopied, setReceiptsCopied] = useState(false);
 
   const pivotId = finding ? pivotEntityId(finding, nodesById) : null;
 
@@ -81,15 +83,37 @@ export default function FindingView({ finding, nodes, links, types, onOpenEntity
 
   const visibleEvidence = showAll ? evidence : evidence.slice(0, EVIDENCE_CAP);
 
-  const whyLine = useMemo(() => (finding ? buildWhyLine(finding) : ''), [finding]);
+  /* "How this was computed": the drier, numbers-only sentence (was "Why this surfaced");
+     the prominent, plain-English whyLine (lib/deal.js) now carries that job under the headline. */
+  const howComputed = useMemo(() => (finding ? buildHowComputed(finding) : ''), [finding]);
 
-  const copyLink = async () => {
+  /* recent coverage mentioning any member entity's name, deduped, newest first (loadExtras
+     already sorts each entity's rows by seendate desc; interleave-and-cap preserves that). */
+  const newsRows = useMemo(() => {
+    if (!finding) return [];
+    const seen = new Set();
+    const out = [];
+    for (const id of finding.member_entity_ids || []) {
+      for (const r of coverageByEntity[id] || []) {
+        const key = r.id ?? r.url;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push(r);
+      }
+    }
+    return out;
+  }, [finding, coverageByEntity]);
+
+  const copyTheReceipts = async () => {
     if (!finding) return;
-    const url = `${window.location.origin}${window.location.pathname}#finding=${finding.id}`;
     try {
-      await navigator.clipboard.writeText(url);
-      setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 1800);
+      // window is only read inside this click handler (never during render), so there's no
+      // hydration mismatch — unlike the ShareRow url below, which deliberately omits an
+      // explicit url and lets ShareRow resolve its own /f/{id} link post-mount instead.
+      const url = typeof window !== 'undefined' ? `${window.location.origin}/f/${finding.id}` : '';
+      await copyReceipts({ title: headlineFor(finding), ties: evidence, url });
+      setReceiptsCopied(true);
+      setTimeout(() => setReceiptsCopied(false), 1800);
     } catch {
       /* clipboard unavailable (insecure context): leave state unchanged */
     }
@@ -120,12 +144,14 @@ export default function FindingView({ finding, nodes, links, types, onOpenEntity
   const tier = confTier(finding.min_confidence);
   const pct = Math.round(finding.min_confidence * 100);
   const registerCount = typeof finding.slots?.n_registers === 'number' ? finding.slots.n_registers : null;
+  const isOverseas = finding.shape_code === 'OVERSEAS_MONEY';
+  const jurisdiction = isOverseas ? finding.slots?.jurisdiction : null;
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '18px 16px 72px' }}>
       <BackBtn onBack={onBack} />
 
-      {/* --------------------------- hero: orrery + headline + stamps --------------------------- */}
+      {/* --------------------------- hero: orrery + headline + why-line + stamps --------------------------- */}
       <div style={{ textAlign: 'center', marginTop: 28 }}>
         <div style={{ display: 'flex', justifyContent: 'center' }}>
           <MiniOrrery finding={finding} nodesById={nodesById} size={280} showLabels />
@@ -133,14 +159,33 @@ export default function FindingView({ finding, nodes, links, types, onOpenEntity
         <p style={{ ...TYPO.display, color: TEXT_1, margin: '20px auto 0', maxWidth: 640 }}>
           {headlineFor(finding)}
         </p>
+        <p style={{ ...TYPO.body, color: TEXT_2, margin: '14px auto 0', maxWidth: 560 }}>
+          {whyLine(finding)}
+        </p>
         <div style={{ display: 'flex', justifyContent: 'center', gap: 8, flexWrap: 'wrap', marginTop: 18 }}>
           <Stamp color={BRASS}>{shapeLabel(finding.shape_code)}</Stamp>
           <Stamp color={tier.color}>{tier.label.toUpperCase()} &middot; {pct}%</Stamp>
           {registerCount != null && (
             <Stamp color={TEXT_2}>{registerCount} {registerCount === 1 ? 'REGISTER' : 'REGISTERS'}</Stamp>
           )}
+          {jurisdiction && <Stamp color={TEXT_2}>REGISTERED RESIDENCE: {jurisdiction}</Stamp>}
         </div>
+        {isOverseas && jurisdiction && (
+          <p style={{ ...TYPO.caption, color: TEXT_3, marginTop: 10 }}>
+            Basis: {finding.slots?.basis || 'Companies House registered residence.'}
+          </p>
+        )}
       </div>
+
+      {/* --------------------------------- in the news --------------------------------- */}
+      {newsRows.length > 0 && (
+        <section style={{ marginTop: 40 }}>
+          <InTheNews
+            rows={newsRows}
+            caption="Recent coverage mentioning names in this finding."
+          />
+        </section>
+      )}
 
       {/* --------------------------------- the evidence --------------------------------- */}
       <section style={{ marginTop: 48 }}>
@@ -177,10 +222,10 @@ export default function FindingView({ finding, nodes, links, types, onOpenEntity
         )}
       </section>
 
-      {/* ------------------------------ why this surfaced ------------------------------ */}
+      {/* ------------------------------ how this was computed ------------------------------ */}
       <section style={{ marginTop: 40 }}>
-        <SectionHeader>Why this surfaced</SectionHeader>
-        <p style={{ ...TYPO.body, color: TEXT_1, marginTop: 14, maxWidth: 640 }}>{whyLine}</p>
+        <SectionHeader>How this was computed</SectionHeader>
+        <p style={{ ...TYPO.caption, color: TEXT_3, marginTop: 14, maxWidth: 640 }}>{howComputed}</p>
         <p style={{ ...TYPO.caption, color: TEXT_3, marginTop: 10 }}>
           A structural overlap drawn from public records. It is a prompt to look, not an allegation.
         </p>
@@ -188,9 +233,9 @@ export default function FindingView({ finding, nodes, links, types, onOpenEntity
 
       {/* --------------------------------- actions --------------------------------- */}
       <section style={{ marginTop: 40, display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-        <CuttingButton finding={finding} nodesById={nodesById} />
-        <ActionButton onClick={copyLink} icon={linkCopied ? Check : LinkSimple} accent={linkCopied}>
-          {linkCopied ? 'Link copied' : 'Copy link'}
+        <ShareRow finding={finding} nodesById={nodesById} />
+        <ActionButton onClick={copyTheReceipts} icon={receiptsCopied ? Check : Copy} accent={receiptsCopied}>
+          {receiptsCopied ? 'Receipts copied' : 'Copy the receipts'}
         </ActionButton>
         {onConnect && (
           <ActionButton onClick={traceInConnect} icon={Path}>
@@ -207,11 +252,12 @@ export default function FindingView({ finding, nodes, links, types, onOpenEntity
   );
 }
 
-/* ------------------------------ why-line builder ------------------------------ */
-/* Assembled purely from the finding's own numbers; every clause is conditional on the
-   relevant slot existing, so a sparse finding still reads as a complete honest sentence
-   rather than printing "undefined". Never a verdict, only a description of the pattern. */
-function buildWhyLine(finding) {
+/* ------------------------------ "how this was computed" builder ------------------------------ */
+/* The drier, numbers-only sentence (was "why this surfaced"): assembled purely from the
+   finding's own numbers, every clause conditional on the relevant slot existing, so a sparse
+   finding still reads as a complete honest sentence rather than printing "undefined". The
+   prominent plain-English whyLine (lib/deal.js) now carries the "why it merits a look" job. */
+function buildHowComputed(finding) {
   const s = finding.slots || {};
   const clauses = [];
 

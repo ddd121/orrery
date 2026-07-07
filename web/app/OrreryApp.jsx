@@ -43,12 +43,18 @@ function rankNodes(nodes) {
   );
 }
 
-export default function OrreryApp({ nodes, links, types, findings, pairs, insightsByEntity, stats }) {
+export default function OrreryApp({
+  nodes, links, types, findings, pairs, insightsByEntity, stats,
+  coverageByEntity, offshoreByEntity, overseasByDonor,
+}) {
   const [view, setView] = useState('home');
   const findingsSafe = findings || [];
   const pairsSafe = pairs || [];
   const insightsByEntitySafe = insightsByEntity || {};
   const statsSafe = stats || {};
+  const coverageByEntitySafe = coverageByEntity || {};
+  const offshoreByEntitySafe = offshoreByEntity || {};
+  const overseasByDonorSafe = overseasByDonor || {};
   const [entityId, setEntityId] = useState(null);
   const [exploreFocus, setExploreFocus] = useState(null);
   const [connectFrom, setConnectFrom] = useState(null);
@@ -67,6 +73,33 @@ export default function OrreryApp({ nodes, links, types, findings, pairs, insigh
     return m;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [findingsSafe]);
+
+  /* First-run trail (plan Wave D.3): a single dismissible caption bar on Home only,
+     inviting a first-time visitor to the Ecotricity LOOP_CLOSED finding. localStorage-gated
+     so it shows once; hidden entirely if that finding isn't in this dataset. Never a modal. */
+  const [trailBarDismissed, setTrailBarDismissed] = useState(true); // hidden until the effect below resolves the flag
+  useEffect(() => {
+    try {
+      setTrailBarDismissed(!!window.localStorage.getItem('orrery.trailSeen'));
+    } catch {
+      setTrailBarDismissed(true); // localStorage unavailable: default to hidden, never throw
+    }
+  }, []);
+  const ecotricityFinding = useMemo(
+    () =>
+      findingsSafe.find(
+        (f) => f.shape_code === 'LOOP_CLOSED' && String(f.slots?.company || '').toLowerCase().includes('ecotricity'),
+      ) || null,
+    [findingsSafe],
+  );
+  const dismissTrailBar = () => {
+    setTrailBarDismissed(true);
+    try {
+      window.localStorage.setItem('orrery.trailSeen', '1');
+    } catch {
+      /* localStorage unavailable: the bar simply won't persist its dismissal */
+    }
+  };
 
   /* Reflect the current finding in the URL hash so a dossier / path / node can be shared and
      restored. replaceState keeps history clean and does NOT fire hashchange, so writing here
@@ -234,6 +267,9 @@ export default function OrreryApp({ nodes, links, types, findings, pairs, insigh
         onConnect={() => goConnect(null)}
       />
       {crumbs && <Breadcrumb items={crumbs} />}
+      {view === 'home' && !trailBarDismissed && ecotricityFinding && (
+        <FirstRunTrailBar onOpen={() => { dismissTrailBar(); openFinding(ecotricityFinding); }} onDismiss={dismissTrailBar} />
+      )}
       <main style={{ flex: 1, width: '100%', display: isExplore ? 'flex' : 'block', minHeight: 0 }}>
         {view === 'explore' && (
           <Suspense
@@ -269,6 +305,8 @@ export default function OrreryApp({ nodes, links, types, findings, pairs, insigh
             pairs={pairsSafe}
             stats={statsSafe}
             insightsByEntity={insightsByEntitySafe}
+            coverageByEntity={coverageByEntitySafe}
+            overseasByDonor={overseasByDonorSafe}
             onOpenEntity={openEntity}
             onOpenFinding={openFinding}
             onOpenLedger={openLedger}
@@ -284,6 +322,9 @@ export default function OrreryApp({ nodes, links, types, findings, pairs, insigh
             types={types}
             insights={insightsByEntitySafe[entityId] || []}
             findings={findingsSafe}
+            coverageByEntity={coverageByEntitySafe}
+            offshoreByEntity={offshoreByEntitySafe}
+            overseasByDonor={overseasByDonorSafe}
             onOpenEntity={openEntity}
             onOpenFinding={openFinding}
             onBack={openLedger}
@@ -297,6 +338,7 @@ export default function OrreryApp({ nodes, links, types, findings, pairs, insigh
             links={links}
             types={types}
             pairs={pairsSafe}
+            insightsByEntity={insightsByEntitySafe}
             onOpenEntity={openEntity}
             onBack={openLedger}
             initialFromId={connectFrom}
@@ -309,6 +351,7 @@ export default function OrreryApp({ nodes, links, types, findings, pairs, insigh
             nodes={nodes}
             links={links}
             types={types}
+            coverageByEntity={coverageByEntitySafe}
             onOpenEntity={openEntity}
             onConnect={goConnect}
             onExplore={openExplore}
@@ -562,6 +605,41 @@ function Breadcrumb({ items }) {
           </React.Fragment>
         );
       })}
+    </div>
+  );
+}
+
+/* First-run invite (plan Wave D.3): one caption-level line, dismissible, never a modal.
+   Both the text and the X hit-area meet the 44px touch target even though the bar itself
+   is visually slim. */
+function FirstRunTrailBar({ onOpen, onDismiss }) {
+  return (
+    <div
+      style={{
+        flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 4, minHeight: 44,
+        padding: '0 6px 0 14px', borderBottom: `1px solid ${HAIR}`, background: 'rgba(232,182,90,0.06)',
+      }}
+    >
+      <button
+        onClick={onOpen}
+        style={{
+          flex: 1, minWidth: 0, textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer',
+          padding: '11px 0', color: TEXT, ...TYPO.caption, fontSize: 12.5,
+        }}
+      >
+        First time? See how one company closed the loop: follow the <b style={{ color: GOLD }}>Ecotricity trail</b>.
+      </button>
+      <button
+        onClick={onDismiss}
+        aria-label="Dismiss"
+        title="Dismiss"
+        style={{
+          width: 44, height: 44, display: 'grid', placeItems: 'center', flex: '0 0 auto',
+          background: 'none', border: 'none', color: MUTE, cursor: 'pointer',
+        }}
+      >
+        <X size={14} />
+      </button>
     </div>
   );
 }
