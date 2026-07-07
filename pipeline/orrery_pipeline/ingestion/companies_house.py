@@ -195,6 +195,11 @@ def build_sql(companies: dict) -> str:
                            f"{name} — PSCs", pscs)
             for psc in pscs.get("items", []):
                 kind = psc.get("kind", "")
+                if not psc.get("name"):
+                    # "super secure" PSCs (kind e.g. 'super-secure-person-with-significant-control')
+                    # withhold identifying details entirely -- no name, nothing safe to attach a
+                    # mention to. Skip rather than invent a raw_name (mentions.raw_name is NOT NULL).
+                    continue
                 corporate = "corporate" in kind or "legal-person" in kind
                 dob = psc.get("date_of_birth") or {}
                 psc_mid = _mention(rows, psc_doc, "company" if corporate else "person",
