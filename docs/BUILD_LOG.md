@@ -98,6 +98,14 @@ effort); Workflows need explicit opt-in. Announce the model + rough cost per del
 
 ## Recompute pipeline (run in this order)
 
+> **Post-build ordering rule (hard-won):** `recompute build` truncates `canonical_entities`, and
+> the FK cascades DELETE every row in `offshore_leads` and `coverage` (their entity ids are
+> regenerated). So the standalone steps must run AFTER the build, never before or during:
+> `recompute build` (use `SKIP_NEWS=1` if running news separately) → `ingestion.icij_leads` →
+> `ingestion.news_coverage`. Never run a build while either standalone step is mid-flight.
+> Also: if a build shows no output for 8+ minutes it is a dead DB socket, not work; kill and
+> rerun once (a clean run takes ~2 minutes).
+
 ```bash
 set -a; . ./.env; set +a          # load secrets
 
